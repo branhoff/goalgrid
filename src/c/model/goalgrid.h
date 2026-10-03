@@ -14,15 +14,34 @@
 enum { GOALGRID_CAPACITY = GOALGRID_WEEKS * GOALGRID_DAYS_PER_WEEK };
 #define GOALGRID_LEVELS 5  // 0 = nothing done ... 4 = every goal met
 
+#define GOALGRID_MAX_GOALS 5
+#define GOALGRID_NAME_LEN 16  // including the terminating NUL
+
+typedef enum { GOAL_BINARY = 0, GOAL_COUNT = 1 } GoalType;
+
+// What the Total view shows for one day: how many goals had any progress.
 typedef struct {
   uint8_t completed;
   uint8_t total;
 } GoalDay;
 
 typedef struct {
-  uint32_t epoch_day;               // day number of days[0]
-  GoalDay days[GOALGRID_CAPACITY];  // days[k] is k days before epoch_day
+  uint32_t epoch_day;  // the day that values[g][0] belongs to
+  uint8_t goal_count;
+  uint8_t types[GOALGRID_MAX_GOALS];
+  char names[GOALGRID_MAX_GOALS][GOALGRID_NAME_LEN];
+  uint8_t values[GOALGRID_MAX_GOALS][GOALGRID_CAPACITY];  // [g][k] = k days before epoch_day
 } GoalGrid;
+
+// A grid as received from the phone. `values` is goal-major and must hold exactly
+// goal_count * GOALGRID_CAPACITY bytes; `names` is '\n'-separated and may be NULL.
+typedef struct {
+  const uint8_t *types;
+  size_t goal_count;
+  const char *names;
+  const uint8_t *values;
+  size_t values_len;
+} GoalPayload;
 
 // Days since 1970-01-01 for a civil date (year >= 1970, month 1-12, day 1-31).
 uint32_t goalgrid_epoch_day(int year, int month, int day);
@@ -36,14 +55,12 @@ void goalgrid_init(GoalGrid *grid, uint32_t epoch_day);
 // gaps longer than the capacity clear the whole grid.
 void goalgrid_roll_to(GoalGrid *grid, uint32_t epoch_day);
 
-void goalgrid_set_today(GoalGrid *grid, uint8_t completed, uint8_t total);
+// Replace the whole grid from a phone payload. Rejects (grid untouched) more than
+// GOALGRID_MAX_GOALS goals, unknown goal types, a missing array, or a values length
+// that is not goal_count * GOALGRID_CAPACITY.
+bool goalgrid_load(GoalGrid *grid, uint32_t epoch_day, const GoalPayload *payload);
 
-// Replace the whole grid from the wire format sent by the phone: `len` bytes of
-// [completed, total] pairs, index 0 = today. Fails (grid untouched) on an odd
-// length; pairs beyond the capacity are ignored, missing pairs stay empty.
-bool goalgrid_load(GoalGrid *grid, uint32_t epoch_day, const uint8_t *pairs, size_t len);
-
-// Returns an empty day when days_ago is out of range.
+// Empty when days_ago is out of range.
 GoalDay goalgrid_day(const GoalGrid *grid, int days_ago);
 
 // Intensity bucket 0..GOALGRID_LEVELS-1 for a day.

@@ -22,10 +22,14 @@
     "watchapp": {
       "watchface": true
     },
+    "capabilities": ["configurable"],
     "messageKeys": [
+      "READY",
+      "REQUEST_GRID",
       "GRID_EPOCH_DAY",
-      "GRID_DAYS",
-      "FIXTURE_STEP"
+      "GRID_TYPES",
+      "GRID_NAMES",
+      "GRID_VALUES"
     ],
     "resources": {
       "media": []

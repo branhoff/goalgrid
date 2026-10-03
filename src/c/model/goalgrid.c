@@ -28,36 +28,70 @@ void goalgrid_roll_to(GoalGrid *grid, uint32_t epoch_day) {
   }
   const uint32_t shift = epoch_day - grid->epoch_day;
   if (shift >= GOALGRID_CAPACITY) {
-    goalgrid_init(grid, epoch_day);
+    memset(grid->values, 0, sizeof(grid->values));  // keep the goal definitions
+    grid->epoch_day = epoch_day;
     return;
   }
-  memmove(&grid->days[shift], &grid->days[0], (GOALGRID_CAPACITY - shift) * sizeof(GoalDay));
-  memset(&grid->days[0], 0, shift * sizeof(GoalDay));
+  for (int goal = 0; goal < GOALGRID_MAX_GOALS; goal++) {
+    uint8_t *series = grid->values[goal];
+    memmove(&series[shift], &series[0], GOALGRID_CAPACITY - shift);
+    memset(&series[0], 0, shift);
+  }
   grid->epoch_day = epoch_day;
 }
 
-void goalgrid_set_today(GoalGrid *grid, uint8_t completed, uint8_t total) {
-  grid->days[0].completed = completed;
-  grid->days[0].total = total;
+static void copy_names(GoalGrid *grid, const char *names) {
+  for (int goal = 0; names != NULL && goal < grid->goal_count; goal++) {
+    const char *end = strchr(names, '\n');
+    size_t len = end != NULL ? (size_t)(end - names) : strlen(names);
+    len = len < GOALGRID_NAME_LEN - 1 ? len : GOALGRID_NAME_LEN - 1;
+    memcpy(grid->names[goal], names, len);
+    names = end != NULL ? end + 1 : NULL;
+  }
 }
 
-bool goalgrid_load(GoalGrid *grid, uint32_t epoch_day, const uint8_t *pairs, size_t len) {
-  if (len % 2 != 0) {
+static bool payload_valid(const GoalPayload *payload) {
+  if (payload->goal_count > GOALGRID_MAX_GOALS ||
+      payload->values_len != payload->goal_count * GOALGRID_CAPACITY) {
     return false;
   }
-  goalgrid_init(grid, epoch_day);
-  for (size_t i = 0; i < len / 2 && i < GOALGRID_CAPACITY; i++) {
-    grid->days[i].completed = pairs[2 * i];
-    grid->days[i].total = pairs[2 * i + 1];
+  if (payload->goal_count > 0 && (payload->types == NULL || payload->values == NULL)) {
+    return false;
+  }
+  for (size_t goal = 0; goal < payload->goal_count; goal++) {
+    if (payload->types[goal] > GOAL_COUNT) {
+      return false;
+    }
   }
   return true;
 }
 
-GoalDay goalgrid_day(const GoalGrid *grid, int days_ago) {
-  if (days_ago < 0 || days_ago >= GOALGRID_CAPACITY) {
-    return (GoalDay){0, 0};
+bool goalgrid_load(GoalGrid *grid, uint32_t epoch_day, const GoalPayload *payload) {
+  if (!payload_valid(payload)) {
+    return false;
   }
-  return grid->days[days_ago];
+  GoalGrid loaded;
+  goalgrid_init(&loaded, epoch_day);
+  loaded.goal_count = (uint8_t)payload->goal_count;
+  if (payload->goal_count > 0) {
+    memcpy(loaded.types, payload->types, payload->goal_count);
+    memcpy(loaded.values, payload->values, payload->values_len);
+  }
+  copy_names(&loaded, payload->names);
+  *grid = loaded;
+  return true;
+}
+
+GoalDay goalgrid_day(const GoalGrid *grid, int days_ago) {
+  GoalDay day = {0, 0};
+  if (days_ago < 0 || days_ago >= GOALGRID_CAPACITY) {
+    return day;
+  }
+  day.total = grid->goal_count;
+  for (int goal = 0; goal < grid->goal_count; goal++) {
+    day.completed = (uint8_t)(day.completed + (grid->values[goal][days_ago] > 0 ? 1 : 0));
+  }
+  return day;
 }
 
 uint8_t goalgrid_level(GoalDay day) {

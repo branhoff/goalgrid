@@ -15,5 +15,7 @@ extern int g_failures;
 
 void test_calendar_math(void);
 void test_grid_behaviour(void);
+void test_load_payload(void);
+void test_layout(void);
 
 #endif  // GOALGRID_TESTS_CHECK_H_

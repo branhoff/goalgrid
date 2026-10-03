@@ -1,11 +1,15 @@
 #include <pebble.h>
 
 #include "model/goalgrid.h"
+#include "model/layout.h"
 #include "ui/matrix_layer.h"
 
 #define PERSIST_KEY_GRID 1
 #define INBOX_SIZE 512
-#define OUTBOX_SIZE 32
+#define OUTBOX_SIZE 64
+#define REFRESH_MINUTES 30
+
+_Static_assert(sizeof(GoalGrid) <= PERSIST_DATA_MAX_LENGTH, "grid must fit one persist key");
 
 static Window *s_window;
 static TextLayer *s_time_layer;
@@ -20,7 +24,8 @@ static uint32_t prv_today_epoch_day(const struct tm *now) {
 
 static void prv_load_grid(const struct tm *now) {
   const uint32_t today = prv_today_epoch_day(now);
-  if (persist_read_data(PERSIST_KEY_GRID, &s_grid, sizeof(s_grid)) == (int)sizeof(s_grid)) {
+  if (persist_get_size(PERSIST_KEY_GRID) == (int)sizeof(s_grid) &&
+      persist_read_data(PERSIST_KEY_GRID, &s_grid, sizeof(s_grid)) == (int)sizeof(s_grid)) {
     goalgrid_roll_to(&s_grid, today);
   } else {
     goalgrid_init(&s_grid, today);
@@ -45,19 +50,38 @@ static void prv_update(void) {
   matrix_layer_set_grid(s_matrix, &s_grid, s_today_weekday);
 }
 
-static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  prv_update();
-}
-
-// The phone pushes the whole grid (fixtures for now, a service later).
-static void prv_inbox_received(DictionaryIterator *iter, void *context) {
-  const Tuple *epoch_day = dict_find(iter, MESSAGE_KEY_GRID_EPOCH_DAY);
-  Tuple *days = dict_find(iter, MESSAGE_KEY_GRID_DAYS);
-  if (!epoch_day || !days) {
+// The watch defines "today": it tells the phone which local day the window ends on.
+static void prv_request_grid(void) {
+  const time_t t = time(NULL);
+  DictionaryIterator *out;
+  if (app_message_outbox_begin(&out) != APP_MSG_OK) {
     return;
   }
-  if (!goalgrid_load(&s_grid, epoch_day->value->uint32, days->value->data, days->length)) {
-    APP_LOG(APP_LOG_LEVEL_ERROR, "bad grid payload (%d bytes)", (int)days->length);
+  dict_write_uint8(out, MESSAGE_KEY_REQUEST_GRID, 1);
+  dict_write_uint32(out, MESSAGE_KEY_GRID_EPOCH_DAY, prv_today_epoch_day(localtime(&t)));
+  app_message_outbox_send();
+}
+
+static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  prv_update();
+  if (tick_time->tm_min % REFRESH_MINUTES == 0) {
+    prv_request_grid();
+  }
+}
+
+static void prv_apply_grid(DictionaryIterator *iter, const Tuple *epoch_day) {
+  const Tuple *types = dict_find(iter, MESSAGE_KEY_GRID_TYPES);
+  const Tuple *values = dict_find(iter, MESSAGE_KEY_GRID_VALUES);
+  const Tuple *names = dict_find(iter, MESSAGE_KEY_GRID_NAMES);
+  const GoalPayload payload = {
+      .types = types ? types->value->data : NULL,
+      .goal_count = types ? types->length : 0,
+      .names = names ? names->value->cstring : NULL,
+      .values = values ? values->value->data : NULL,
+      .values_len = values ? values->length : 0,
+  };
+  if (!goalgrid_load(&s_grid, epoch_day->value->uint32, &payload)) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "rejected grid payload (%d goals)", (int)payload.goal_count);
     return;
   }
   if (s_matrix) {
@@ -65,15 +89,14 @@ static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   }
 }
 
-// A wrist tap asks the phone for the next fixture, for quick UI review.
-// (Watchfaces cannot use the buttons: the OS reserves them for timeline/launcher.)
-static void prv_tap_handler(AccelAxisType axis, int32_t direction) {
-  DictionaryIterator *out;
-  if (app_message_outbox_begin(&out) != APP_MSG_OK) {
-    return;
+static void prv_inbox_received(DictionaryIterator *iter, void *context) {
+  if (dict_find(iter, MESSAGE_KEY_READY)) {
+    prv_request_grid();
   }
-  dict_write_int32(out, MESSAGE_KEY_FIXTURE_STEP, 1);
-  app_message_outbox_send();
+  const Tuple *epoch_day = dict_find(iter, MESSAGE_KEY_GRID_EPOCH_DAY);
+  if (epoch_day) {
+    prv_apply_grid(iter, epoch_day);
+  }
 }
 
 static TextLayer *prv_text_layer_create(Layer *parent, GRect frame, const char *font_key) {
@@ -91,31 +114,13 @@ static void prv_window_load(Window *window) {
   const GRect bounds = layer_get_bounds(root);
   window_set_background_color(window, GColorBlack);
 
-  // Vertical layout: the visible pixels of the time, date and calendar are
-  // separated by three equal gaps (top margin, below the date, bottom margin).
-  // The constants are glyph offsets of the system fonts used below.
-  const int time_h = 46;
-  const int date_h = 26;
-  const int time_glyph_top = 12;     // blank rows above Bitham 42 digits
-  const int date_glyph_bottom = 17;  // Gothic 18 baseline inside its box
-  const int text_visible_h =
-      time_h + date_glyph_bottom - time_glyph_top;  // time top -> date bottom
-
-  const int side_pad = PBL_IF_ROUND_ELSE(bounds.size.w / 10, 2);
-  const int cal_w = bounds.size.w - 2 * side_pad;
-  const int cal_h = matrix_layer_content_height(cal_w, bounds.size.h - text_visible_h - 12);
-  const int cal_visible_h = cal_h - MATRIX_LAYER_TOP_INSET - MATRIX_LAYER_BOTTOM_INSET;
-
-  const int gap = (bounds.size.h - text_visible_h - cal_visible_h) / 3;
-  const int time_y = gap - time_glyph_top;
-  const int date_y = time_y + time_h;
-  const int cal_y = date_y + date_glyph_bottom + gap - MATRIX_LAYER_TOP_INSET;
-
-  s_time_layer =
-      prv_text_layer_create(root, GRect(0, time_y, bounds.size.w, time_h), FONT_KEY_BITHAM_42_BOLD);
-  s_date_layer =
-      prv_text_layer_create(root, GRect(0, date_y, bounds.size.w, date_h), FONT_KEY_GOTHIC_18_BOLD);
-  s_matrix = matrix_layer_create(GRect(side_pad, cal_y, cal_w, cal_h));
+  const Layout layout =
+      layout_compute(bounds.size.w, bounds.size.h, PBL_IF_ROUND_ELSE(true, false));
+  s_time_layer = prv_text_layer_create(root, GRect(0, layout.time_y, bounds.size.w, LAYOUT_TIME_H),
+                                       FONT_KEY_BITHAM_42_BOLD);
+  s_date_layer = prv_text_layer_create(root, GRect(0, layout.date_y, bounds.size.w, LAYOUT_DATE_H),
+                                       FONT_KEY_GOTHIC_18_BOLD);
+  s_matrix = matrix_layer_create(GRect(layout.cal_x, layout.cal_y, layout.cal_w, layout.cal_h));
   layer_add_child(root, matrix_layer_get_layer(s_matrix));
 
   prv_update();
@@ -140,11 +145,9 @@ static void prv_init(void) {
                                        });
   window_stack_push(s_window, true);
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
-  accel_tap_service_subscribe(prv_tap_handler);
 }
 
 static void prv_deinit(void) {
-  accel_tap_service_unsubscribe();
   tick_timer_service_unsubscribe();
   persist_write_data(PERSIST_KEY_GRID, &s_grid, sizeof(s_grid));
   window_destroy(s_window);

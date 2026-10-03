@@ -1,10 +1,10 @@
-add_executable(test_goalgrid test_main.c test_calendar.c test_grid.c)
+add_executable(test_goalgrid test_main.c test_calendar.c test_grid.c test_load.c test_layout.c)
 target_link_libraries(test_goalgrid PRIVATE goalgrid_model)
 add_test(NAME goalgrid COMMAND test_goalgrid)
 
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
-  add_test(NAME pkjs COMMAND ${NODE_EXECUTABLE} --test ${CMAKE_CURRENT_SOURCE_DIR}/test_grid_data.test.js
+  add_test(NAME pkjs COMMAND ${NODE_EXECUTABLE} --test ${CMAKE_CURRENT_SOURCE_DIR}/*.test.js
            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
 endif()
 
