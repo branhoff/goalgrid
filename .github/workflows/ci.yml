@@ -1,0 +1,28 @@
+name: CI
+
+# The authoritative, non-bypassable quality gate. Make these jobs required
+# status checks in branch protection (Settings -> Branches). Both jobs run the
+# same dev image developers use (Dockerfile), so "green locally" means "green here".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The image's devuser is UID 1000; the runner's checkout belongs to another UID.
+      - run: chmod -R a+rwX .
+      - name: Full gate (typecheck, lint, format, tests + coverage, structure, dead code)
+        run: CONTAINER_RUNTIME=docker scripts/dev.sh make verify
+
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: chmod -R a+rwX .
+      - name: Grade test quality (break threshold enforced)
+        run: CONTAINER_RUNTIME=docker scripts/dev.sh make mutation

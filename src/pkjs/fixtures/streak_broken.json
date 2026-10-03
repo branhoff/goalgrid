@@ -1,0 +1,208 @@
+{
+ "version": 1,
+ "name": "streak_broken",
+ "goals": [
+  {
+   "id": "read",
+   "name": "Read 20 min"
+  },
+  {
+   "id": "move",
+   "name": "Move 30 min"
+  },
+  {
+   "id": "write",
+   "name": "Write"
+  },
+  {
+   "id": "sleep",
+   "name": "In bed by 11"
+  }
+ ],
+ "days": [
+  {
+   "date": "2026-09-05",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-06",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-07",
+   "completed": [
+    "sleep"
+   ]
+  },
+  {
+   "date": "2026-09-08",
+   "completed": [
+    "move",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-09",
+   "completed": [
+    "move",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-10",
+   "completed": [
+    "move"
+   ]
+  },
+  {
+   "date": "2026-09-11",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-12",
+   "completed": [
+    "move"
+   ]
+  },
+  {
+   "date": "2026-09-13",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-15",
+   "completed": [
+    "read",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-17",
+   "completed": [
+    "sleep"
+   ]
+  },
+  {
+   "date": "2026-09-18",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-19",
+   "completed": [
+    "move",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-20",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-21",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-22",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-23",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-24",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-25",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-26",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-27",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-28",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-10-02",
+   "completed": []
+  }
+ ]
+}

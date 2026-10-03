@@ -1,0 +1,108 @@
+{
+ "version": 1,
+ "name": "empty",
+ "goals": [
+  {
+   "id": "read",
+   "name": "Read 20 min"
+  },
+  {
+   "id": "move",
+   "name": "Move 30 min"
+  },
+  {
+   "id": "write",
+   "name": "Write"
+  },
+  {
+   "id": "sleep",
+   "name": "In bed by 11"
+  }
+ ],
+ "days": [
+  {
+   "date": "2026-09-07",
+   "completed": [
+    "move",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-08",
+   "completed": [
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-09",
+   "completed": [
+    "read"
+   ]
+  },
+  {
+   "date": "2026-09-10",
+   "completed": [
+    "sleep"
+   ]
+  },
+  {
+   "date": "2026-09-11",
+   "completed": [
+    "read"
+   ]
+  },
+  {
+   "date": "2026-09-12",
+   "completed": [
+    "move",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-14",
+   "completed": [
+    "move",
+    "sleep"
+   ]
+  },
+  {
+   "date": "2026-09-15",
+   "completed": [
+    "read",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-16",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-17",
+   "completed": [
+    "move",
+    "read",
+    "sleep",
+    "write"
+   ]
+  },
+  {
+   "date": "2026-09-19",
+   "completed": [
+    "move",
+    "read",
+    "sleep"
+   ]
+  },
+  {
+   "date": "2026-10-02",
+   "completed": []
+  }
+ ]
+}

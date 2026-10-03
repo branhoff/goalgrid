@@ -1,0 +1,9 @@
+line-length = 100
+target-version = "py311"
+extend-exclude = ["build", "out", "shots"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "C90"]
+
+[lint.mccabe]
+max-complexity = 10

@@ -1,0 +1,2 @@
+argv = ["${python}", "${dir}/c_structure.py", "${args}", "${files}"]
+args = ["--max-function-lines", "40", "--max-params", "4", "--max-nesting", "3"]

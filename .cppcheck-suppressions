@@ -1,0 +1,6 @@
+# Pebble SDK headers are not available to host-side analysis.
+missingIncludeSystem
+# Entry points are referenced by the SDK / test runner, not by other code.
+unusedFunction:src/c/main.c
+# The SDK dictates the tick-handler signature (struct tm *), so it cannot be const.
+constParameterCallback:src/c/main.c

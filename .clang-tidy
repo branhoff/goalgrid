@@ -1,0 +1,26 @@
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  misc-*,
+  -misc-include-cleaner,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  performance-*,
+  portability-*,
+  readability-function-size,
+  readability-function-cognitive-complexity,
+  readability-else-after-return,
+  readability-redundant-*,
+  readability-misleading-indentation
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'src/c/model/.*'
+CheckOptions:
+  - key: readability-function-size.LineThreshold
+    value: 40
+  - key: readability-function-size.ParameterThreshold
+    value: 4
+  - key: readability-function-size.NestingThreshold
+    value: 3
+  - key: readability-function-cognitive-complexity.Threshold
+    value: 10

@@ -1,0 +1,11 @@
+__pycache__/
+.coverage
+.DS_Store
+.lock-waf*
+.ruff_cache/
+*.pyc
+build/
+compile_commands.json
+out/
+screenshot.png
+shots/

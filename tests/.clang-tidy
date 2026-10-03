@@ -1,0 +1,4 @@
+# Tests are long runs of assertions; the CHECK macro's hidden branch would
+# otherwise dominate complexity scores. Everything else is inherited.
+InheritParentConfig: true
+Checks: '-readability-function-cognitive-complexity,-readability-function-size'

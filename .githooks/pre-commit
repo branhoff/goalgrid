@@ -1,0 +1,23 @@
+#!/bin/sh
+# Fast gate on every commit: auto-fix formatting, then run `make check` +
+# structural checks. Blocks the commit on failure — bypass in a genuine pinch
+# with `git commit --no-verify`. Mutation testing is deliberately NOT here (too
+# slow for a commit; it would just train everyone to use --no-verify); it runs
+# in CI, which is the authoritative, non-bypassable gate (see
+# .github/workflows/ci.yml + required status checks / branch protection).
+# Enable with `make hooks` (sets core.hooksPath).
+
+set -e
+
+# Auto-format, then re-stage only the files that were already staged, so a
+# formatting-only slip fixes itself instead of blocking the commit.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -n "$staged" ]; then
+	make format
+	printf '%s\n' "$staged" | while IFS= read -r f; do
+		[ -n "$f" ] && git add -- "$f"
+	done
+fi
+
+make check
+make structure

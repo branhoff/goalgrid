@@ -1,0 +1,2 @@
+plugins = ["c", "generic"]
+files = ["src/**/*.c", "src/**/*.h", "tests/**/*.c"]
