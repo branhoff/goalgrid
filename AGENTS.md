@@ -49,7 +49,7 @@ something is skipped or failing, say so plainly with the output.
 2. **Types are a gate.** C has no type checker, so strict warnings as errors
    (`-Wconversion`, `-Wshadow`, ...) plus the Pebble SDK's own build are the type gate.
 3. **Coverage is enforced where it can be measured.** Thresholds: C model lines 90 /
-   branches 85, Python sensor 90, pkjs `grid_data.js` 90/85. `main.c`, `matrix_layer.c`,
+   branches 85, Python sensor 90, pkjs `wire.js`/`calendar.js`/`service.js`/`config.js` 90/85. `main.c`, `matrix_layer.c`,
    and `pkjs/index.js` are wiring that needs the Pebble runtime; they are excluded and
    covered instead by the strict build and emulator review. Keep them thin.
 4. **Mutation testing grades the tests.** `make mutation` mutates `goalgrid.c` and must
@@ -69,19 +69,25 @@ something is skipped or failing, say so plainly with the output.
 
 ## Pebble-specific rules
 
-- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). Dev-only input, like
-  cycling fixtures, uses a wrist tap.
+- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). The wrist flick is
+  reserved for stepping through goal views; dev-only fixture selection never lives on
+  the watch (use `tools/push_fixture.js`).
 - `src/pkjs/` must stay **ES5** (PebbleKit JS); a test enforces it.
 - After editing `messageKeys` in `package.json`, run `pebble clean`.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.
-- Keep the capacity constant in `goalgrid.h` and `pkjs/grid_data.js` in sync.
-- The data contract is schema v1 (documented in `tools/gen_fixtures.py`). Regenerate
-  fixtures with that script; `fixtures_current` fails if they drift.
+- Keep `GOALGRID_CAPACITY`, `GOALGRID_MAX_GOALS`, `GOALGRID_NAME_LEN` in `goalgrid.h` and
+  their copies at the top of `pkjs/wire.js` in sync.
+- The data contract is ring-capture's `GET /grid` schema 2 (raw UTC events, half-open
+  `[from, to)` ms window); `tests/contract/` holds a golden response and
+  `tools/gen_fixtures.py` generates fixtures in that shape (`fixtures_current` fails if
+  they drift). The watch defines "today"; the client buckets events into local days
+  (`pkjs/calendar.js`). Never do calendar logic on the service side, and test any
+  calendar change under real timezones including DST.
 
 ## Reviewing the running UI (agents)
 
 The agent sandbox cannot start an emulator but can drive one the user already started
-(`pebble install|screenshot|emu-tap --emulator emery`). Judge layout with
+(`pebble install|screenshot --emulator emery` and `tools/push_fixture.js`). Judge layout with
 `tools/measure.py` numbers and `tools/contact_sheet.py`, not by eye. Pasted screenshots
 may be dimmed; trust fresh ones. Details in `CLAUDE.md`.
 

@@ -8,15 +8,15 @@ records where the standard template had no good option for C.
 | **Formatter** | `clang-format` (`.clang-format`) | none — see note 1 | `ruff format` |
 | **Linter** | `clang-tidy` (`.clang-tidy`) + `cppcheck` | `node --check` + ES5 guard test | `ruff check` |
 | **Type check** | `-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror` + `pebble build` (7 platforms) | n/a | n/a |
-| **Tests** | CTest; C built with ASan + UBSan | `node --test` | `unittest` |
-| **Coverage (enforced)** | `gcovr` (lines 90 / branches 85) on `src/c/model` | Node built-in (90 / 85 / 90) | `coverage.py` (90) |
+| **Tests** | CTest; C built with ASan + UBSan | `node --test` (wire, service, config, ES5 guard, fixture tool) | `unittest` |
+| **Coverage (enforced)** | `gcovr` (lines 90 / branches 85) on `src/c/model` | Node built-in on wire/service/config (90 / 85 / 90); `index.js` is Pebble wiring, excluded | `coverage.py` (90) |
 | **Mutation** | `universalmutator` on the model, seeded sample, `MUTATION_MIN` | not used — see note 2 | not used |
 | **Dead code** | `cppcheck --enable=unusedFunction` | — | `ruff` (F401/F841) |
 | **Structure** | `habit-hooks` + the local **habit-hooks-c** plugin | not scanned — see note 3 | `habit-hooks` generic |
 
 ## Notes and known gaps
 
-1. **JS formatter:** the pkjs is ~85 lines. A formatter (prettier) would add an npm
+1. **JS formatter:** the pkjs is ~300 lines. A formatter (prettier) would add an npm
    dependency tree larger than the code. Compensation: `node --check`, an ES5 guard
    test, and review. Revisit if the pkjs grows.
 2. **Mutation beyond C:** the JS and Python here are small and fully covered; mutation
