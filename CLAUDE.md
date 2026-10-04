@@ -14,13 +14,17 @@ the user already started. Ask the user to run `pebble install --emulator emery` 
 pebble install --emulator emery                      # push a new build to the running emulator
 pebble screenshot --emulator emery --no-open shots/a.png   # no --scale flag in this SDK
 uv run tools/measure.py shots/a.png                  # numeric margins/bands: check centering
-uv run tools/contact_sheet.py emery 7                # cycle all fixtures by wrist tap -> shots/contact.png
-pebble emu-tap --emulator emery --direction z+       # next fixture
+node tools/push_fixture.js perfect --emulator emery  # push one fixture AppMessage to the watch
+uv run tools/contact_sheet.py emery                  # push every fixture + screenshot -> shots/contact.png
 ```
 
 - Screenshots the user pastes may be dimmed (backlight off); trust fresh `pebble screenshot` output.
 - Only platforms the user has running can be checked (ask for chalk/aplite/diorite).
 - Never send Up/Down/Select to the watchface (opens timeline/launcher); press Back to return.
+- `send-app-message` takes numeric key ids (from `build/js/message_keys.json`) and only the
+  LAST `--bytes` flag counts, so pass all byte arrays to one `--bytes`. `pebble logs` shows
+  the watch's `APP_LOG` (e.g. a rejected payload).
+- After editing `messageKeys`, run `pebble clean`; `make typecheck` always builds clean.
 - Host emulator work uses the Mac's `pebble` tool; `make verify` uses the container.
 
 ## SDK Documentation

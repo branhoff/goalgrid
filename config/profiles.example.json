@@ -1,0 +1,10 @@
+{
+  "local": {
+    "baseUrl": "http://localhost:8787",
+    "token": "change-me-to-a-random-string"
+  },
+  "prod": {
+    "baseUrl": "https://your-service.example",
+    "token": "put-the-real-bearer-token-here"
+  }
+}

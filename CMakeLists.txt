@@ -17,7 +17,7 @@ option(GOALGRID_BUILD_TESTS "Build host unit tests" ON)
 set(GOALGRID_EMULATOR "emery" CACHE STRING "Pebble emulator platform used by the pebble-* targets")
 
 # --- Host-side model library ---------------------------------------------------
-add_library(goalgrid_model STATIC src/c/model/goalgrid.c)
+add_library(goalgrid_model STATIC src/c/model/goalgrid.c src/c/model/layout.c)
 target_include_directories(goalgrid_model PUBLIC src/c)
 
 # One shared set of strict flags/instrumentation for all host targets.

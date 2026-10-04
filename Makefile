@@ -9,7 +9,11 @@ MAKEFLAGS += --no-builtin-rules
 VERBS := check verify test coverage mutation lint format format-check typecheck structure \
          deadcode clean
 
-.PHONY: help setup hooks shell $(VERBS)
+.PHONY: help setup hooks shell live config config-local config-prod review $(VERBS)
+
+# Host-only: the live service check needs the host network and the host emulator.
+EMULATOR ?= emery
+PROFILE ?= local
 
 help:
 	@echo ""
@@ -29,6 +33,13 @@ help:
 	@echo "  make shell         Interactive shell in the dev container"
 	@echo "  make clean         Remove build artifacts"
 	@echo ""
+	@echo "Host-only (needs the host network + a running emulator):"
+	@echo "  make config        Point the watch at a config profile, then reinstall to apply"
+	@echo "    make config PROFILE=prod   (or: make config-local / make config-prod)"
+	@echo "  make live          Fetch /grid live and push it to the watch"
+	@echo "    AUTH_TOKEN=... GOALGRID_URL=https://... [EMULATOR=emery] make live"
+	@echo "  make review        Local LLM reviewer pass over the uncommitted change set"
+	@echo ""
 
 setup: hooks
 	scripts/dev.sh true
@@ -37,6 +48,32 @@ setup: hooks
 hooks:
 	git config core.hooksPath .githooks
 	@echo "git hooks enabled (core.hooksPath -> .githooks)"
+
+# Runs directly on the host (not in the container): it talks to the deployed service and
+# the running emulator. Fetches /grid with AUTH_TOKEN, validates it, and pushes it to the
+# watch through the real wire pipeline.
+live:
+	@test -n "$(AUTH_TOKEN)" || { echo "Set AUTH_TOKEN=... (the service bearer token)"; exit 1; }
+	@test -n "$(GOALGRID_URL)" || { echo "Set GOALGRID_URL=https://... (the service base URL)"; exit 1; }
+	node tools/live_grid.js "$(GOALGRID_URL)" --push --emulator $(EMULATOR) --out shots/live_response.json
+
+# Swap the watch between data sources (config/profiles.json). Writes the profile into the
+# emulator's localStorage, then reinstalls so PebbleKit JS restarts and refetches from it.
+config:
+	python3 tools/set_config.py $(PROFILE) --emulator $(EMULATOR)
+	pebble install --emulator $(EMULATOR)
+
+config-local:
+	@$(MAKE) config PROFILE=local
+
+config-prod:
+	@$(MAKE) config PROFILE=prod
+
+# Local, on-demand reviewer pass (AGENTS.md rule #9). Deliberately not in CI or the
+# pre-commit hook: an LLM review is slow, costs tokens, and is non-deterministic. Run it
+# yourself before committing a substantial change. REF overrides the base (default HEAD).
+review:
+	scripts/review.sh
 
 ifndef GOALGRID_CONTAINER
 
@@ -53,8 +90,10 @@ HOST_C := $(wildcard src/c/model/*.c) $(wildcard tests/*.c)
 COV_LINES ?= 90
 COV_BRANCHES ?= 85
 PY_COV ?= 90
-JS_TEST := tests/test_grid_data.test.js
-JS_COVERAGE := --experimental-test-coverage --test-coverage-include=src/pkjs/grid_data.js \
+JS_TEST := "tests/*.test.js"
+JS_COVERAGE := --experimental-test-coverage --test-coverage-include=src/pkjs/wire.js --test-coverage-include=src/pkjs/calendar.js \
+               --test-coverage-include=src/pkjs/service.js --test-coverage-include=src/pkjs/config.js \
+               --test-coverage-include=web/onboard.js \
                --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-functions=90
 
 CMAKE_HOST = cmake -S . -B out/host -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -66,6 +105,7 @@ verify: check structure deadcode
 typecheck:
 	$(CMAKE_HOST) >/dev/null
 	cmake --build out/host
+	pebble clean
 	pebble build
 
 lint:
@@ -74,7 +114,7 @@ lint:
 	cppcheck --enable=warning,style,performance,portability --suppressions-list=.cppcheck-suppressions \
 	  --error-exitcode=1 --quiet src/c tests
 	ruff check tools
-	node --check src/pkjs/index.js src/pkjs/grid_data.js
+	for f in src/pkjs/*.js tools/*.js web/*.js; do node --check $$f || exit 1; done
 
 format:
 	clang-format -i $(C_FILES)

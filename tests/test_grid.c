@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "check.h"
 #include "model/goalgrid.h"
 
@@ -11,6 +13,7 @@ static void test_level(void) {
   CHECK(goalgrid_level((GoalDay){2, 3}) == 2);  // 66%: top of the middle bucket
   CHECK(goalgrid_level((GoalDay){3, 4}) == 3);
   CHECK(goalgrid_level((GoalDay){1, 1}) == 4);
+  CHECK(goalgrid_level((GoalDay){3, 0}) == 0);  // progress with no goals defined: nothing to show
   CHECK(goalgrid_level((GoalDay){66, 100}) == 2);
   CHECK(goalgrid_level((GoalDay){67, 100}) == 3);
   CHECK(goalgrid_level((GoalDay){3, 4}) == 3);
@@ -18,89 +21,84 @@ static void test_level(void) {
   CHECK(goalgrid_level((GoalDay){5, 4}) == 4);
 }
 
-static void test_roll(void) {
+// Two goals with distinct, easy-to-track values: goal g, k days back = 10*(g+1) + k.
+static GoalGrid sample_grid(uint32_t epoch_day) {
   GoalGrid grid;
-  goalgrid_init(&grid, 100);
-  goalgrid_set_today(&grid, 2, 3);
-
-  goalgrid_roll_to(&grid, 100);  // same day: no-op
-  CHECK(goalgrid_day(&grid, 0).completed == 2);
-
-  goalgrid_roll_to(&grid, 99);  // past: ignored
-  CHECK(grid.epoch_day == 100);
-
-  goalgrid_roll_to(&grid, 102);
-  CHECK(grid.epoch_day == 102);
-  CHECK(goalgrid_day(&grid, 0).total == 0);
-  CHECK(goalgrid_day(&grid, 1).total == 0);
-  CHECK(goalgrid_day(&grid, 2).completed == 2);
-  CHECK(goalgrid_day(&grid, 2).total == 3);
-
-  goalgrid_set_today(&grid, 9, 9);
-  goalgrid_roll_to(&grid, 102 + GOALGRID_CAPACITY + 5);  // gap wider than history wipes it
-  CHECK(grid.epoch_day == 102 + GOALGRID_CAPACITY + 5);
-  CHECK(goalgrid_day(&grid, 0).total == 0);
-  goalgrid_set_today(&grid, 9, 9);
-  goalgrid_roll_to(&grid, grid.epoch_day + GOALGRID_CAPACITY);  // exactly the history length
-  CHECK(goalgrid_day(&grid, 0).total == 0);
-  for (int i = 0; i < GOALGRID_CAPACITY; i++) {
-    CHECK(goalgrid_day(&grid, i).completed == 0);
+  goalgrid_init(&grid, epoch_day);
+  grid.goal_count = 2;
+  strcpy(grid.names[0], "run");
+  strcpy(grid.names[1], "read");
+  for (int goal = 0; goal < 2; goal++) {
+    for (int k = 0; k < GOALGRID_CAPACITY; k++) {
+      grid.values[goal][k] = (uint8_t)(10 * (goal + 1) + k);
+    }
   }
+  return grid;
 }
 
-static void test_roll_shifts_the_whole_history(void) {
-  GoalGrid grid;
-  goalgrid_init(&grid, 500);
-  for (int i = 0; i < GOALGRID_CAPACITY; i++) {
-    grid.days[i] = (GoalDay){(uint8_t)(i + 1), (uint8_t)(i + 50)};
-  }
+static void test_roll_ignores_same_and_earlier_days(void) {
+  GoalGrid grid = sample_grid(100);
+  goalgrid_roll_to(&grid, 100);
+  goalgrid_roll_to(&grid, 99);
+  CHECK(grid.epoch_day == 100);
+  CHECK(grid.values[0][0] == 10 && grid.values[1][GOALGRID_CAPACITY - 1] == 40);
+}
 
+static void test_roll_shifts_every_goal(void) {
+  GoalGrid grid = sample_grid(500);
   const int shift = 3;
   goalgrid_roll_to(&grid, 500 + (uint32_t)shift);
-
-  for (int i = 0; i < shift; i++) {
-    CHECK(goalgrid_day(&grid, i).completed == 0 && goalgrid_day(&grid, i).total == 0);
+  CHECK(grid.epoch_day == 503);
+  for (int goal = 0; goal < 2; goal++) {
+    for (int k = 0; k < shift; k++) {
+      CHECK(grid.values[goal][k] == 0);
+    }
+    for (int k = shift; k < GOALGRID_CAPACITY; k++) {
+      CHECK(grid.values[goal][k] == 10 * (goal + 1) + (k - shift));
+    }
   }
-  for (int i = shift; i < GOALGRID_CAPACITY; i++) {
-    CHECK(goalgrid_day(&grid, i).completed == i - shift + 1);
-    CHECK(goalgrid_day(&grid, i).total == i - shift + 50);
+  CHECK(grid.goal_count == 2 && strcmp(grid.names[1], "read") == 0);
+}
+
+static void test_roll_past_the_history_keeps_goals_but_clears_values(void) {
+  const uint32_t gaps[] = {GOALGRID_CAPACITY, GOALGRID_CAPACITY + 5};
+  for (size_t i = 0; i < sizeof(gaps) / sizeof(gaps[0]); i++) {
+    GoalGrid grid = sample_grid(100);
+    goalgrid_roll_to(&grid, 100 + gaps[i]);
+    CHECK(grid.epoch_day == 100 + gaps[i]);
+    CHECK(grid.goal_count == 2 && strcmp(grid.names[0], "run") == 0);
+    for (int k = 0; k < GOALGRID_CAPACITY; k++) {
+      CHECK(grid.values[0][k] == 0 && grid.values[1][k] == 0);
+    }
   }
 }
 
-static void test_day_bounds(void) {
-  GoalGrid grid;
-  // Non-zero epoch bytes sit just before days[], so an off-by-one read is visible.
-  goalgrid_init(&grid, 0x05050505u);
+static void test_day_counts_goals_with_progress(void) {
+  GoalGrid grid = sample_grid(100);
+  grid.values[1][2] = 0;
+  const GoalDay day = goalgrid_day(&grid, 2);
+  CHECK(day.completed == 1 && day.total == 2);
+  const GoalDay first = goalgrid_day(&grid, 0);
+  CHECK(first.completed == 2 && first.total == 2);
+}
+
+// A binary goal reports exactly 1 when done; that must count as progress.
+static void test_a_value_of_one_counts_as_progress(void) {
+  GoalGrid grid = sample_grid(100);
+  grid.values[0][4] = 1;
+  grid.values[1][4] = 0;
+  CHECK(goalgrid_day(&grid, 4).completed == 1);
+  grid.values[0][4] = 0;
+  CHECK(goalgrid_day(&grid, 4).completed == 0);
+}
+
+static void test_day_outside_history_is_empty(void) {
+  GoalGrid grid = sample_grid(0x05050505u);
   const int outside[] = {-1, -100, GOALGRID_CAPACITY, GOALGRID_CAPACITY + 50};
   for (size_t i = 0; i < sizeof(outside) / sizeof(outside[0]); i++) {
     const GoalDay day = goalgrid_day(&grid, outside[i]);
     CHECK(day.completed == 0 && day.total == 0);
   }
-}
-
-static void test_load(void) {
-  GoalGrid grid;
-  goalgrid_init(&grid, 5);
-  goalgrid_set_today(&grid, 1, 1);
-
-  const uint8_t odd[] = {1, 2, 3};
-  CHECK(!goalgrid_load(&grid, 50, odd, sizeof(odd)));
-  CHECK(grid.epoch_day == 5 && goalgrid_day(&grid, 0).completed == 1);  // untouched
-
-  const uint8_t pairs[] = {2, 4, 0, 5, 6, 7};
-  CHECK(goalgrid_load(&grid, 50, pairs, sizeof(pairs)));
-  CHECK(grid.epoch_day == 50);
-  CHECK(goalgrid_day(&grid, 0).completed == 2 && goalgrid_day(&grid, 0).total == 4);
-  CHECK(goalgrid_day(&grid, 1).completed == 0 && goalgrid_day(&grid, 1).total == 5);
-  CHECK(goalgrid_day(&grid, 2).completed == 6 && goalgrid_day(&grid, 2).total == 7);
-  CHECK(goalgrid_day(&grid, 3).total == 0);  // beyond supplied data
-
-  uint8_t big[(GOALGRID_CAPACITY + 10) * 2];
-  for (size_t i = 0; i < sizeof(big); i++) {
-    big[i] = 1;
-  }
-  CHECK(goalgrid_load(&grid, 60, big, sizeof(big)));  // excess ignored, no overflow
-  CHECK(goalgrid_day(&grid, GOALGRID_CAPACITY - 1).total == 1);
 }
 
 static void test_days_ago(void) {
@@ -131,9 +129,11 @@ static void test_days_ago(void) {
 
 void test_grid_behaviour(void) {
   test_level();
-  test_roll();
-  test_roll_shifts_the_whole_history();
-  test_day_bounds();
-  test_load();
+  test_roll_ignores_same_and_earlier_days();
+  test_roll_shifts_every_goal();
+  test_roll_past_the_history_keeps_goals_but_clears_values();
+  test_day_counts_goals_with_progress();
+  test_a_value_of_one_counts_as_progress();
+  test_day_outside_history_is_empty();
   test_days_ago();
 }

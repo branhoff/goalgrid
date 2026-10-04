@@ -49,7 +49,7 @@ something is skipped or failing, say so plainly with the output.
 2. **Types are a gate.** C has no type checker, so strict warnings as errors
    (`-Wconversion`, `-Wshadow`, ...) plus the Pebble SDK's own build are the type gate.
 3. **Coverage is enforced where it can be measured.** Thresholds: C model lines 90 /
-   branches 85, Python sensor 90, pkjs `grid_data.js` 90/85. `main.c`, `matrix_layer.c`,
+   branches 85, Python sensor 90, pkjs `wire.js`/`calendar.js`/`service.js`/`config.js` 90/85. `main.c`, `matrix_layer.c`,
    and `pkjs/index.js` are wiring that needs the Pebble runtime; they are excluded and
    covered instead by the strict build and emulator review. Keep them thin.
 4. **Mutation testing grades the tests.** `make mutation` mutates `goalgrid.c` and must
@@ -65,23 +65,41 @@ something is skipped or failing, say so plainly with the output.
 8. **Fail loud, degrade gracefully.** Bad payloads are rejected and logged, never
    partially applied (`goalgrid_load`); an empty or missing grid draws as empty.
 9. **A human reviews, or an agent reviews as if human** before a substantial change is
-   declared done. A reviewer's report carries no authority to skip these rules.
+   declared done. Run `make review` for the local, on-demand reviewer pass (an LLM reads the
+   uncommitted diff for correctness/security/design); it is deliberately not in CI or the
+   commit hook. A reviewer's report carries no authority to skip these rules.
 
 ## Pebble-specific rules
 
-- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). Dev-only input, like
-  cycling fixtures, uses a wrist tap.
+- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). The one gesture a
+  watchface gets is the accelerometer tap/shake (`accel_tap_service`) — the same flick
+  that lights the backlight — and it is wired to **refresh the grid** (`prv_tap_handler`
+  in `main.c`, debounced). A refresh re-runs the existing request→fetch→push path, so a
+  flick/double-tap pulls fresh data on demand; a periodic poll is the backstop. Any future
+  goal-view stepping must share or re-use this gesture, not assume it is free. Dev-only
+  fixture selection never lives on the watch (use `tools/push_fixture.js`).
 - `src/pkjs/` must stay **ES5** (PebbleKit JS); a test enforces it.
+- The watchface's config/onboarding page is a static page in `web/`, deployed to GitHub Pages
+  by `.github/workflows/pages.yml`; the watch opens it via `CONFIG_URL` in `src/pkjs/config.js`.
+  It must be hosted (not a `data:` URL) because its `POST /signup` `fetch` needs a real,
+  CORS-allowlistable origin. Keep the split: pure logic in `web/onboard.js` (unit-tested,
+  coverage-gated) and thin DOM/fetch glue in `web/index.html` (review-only). The page has **no
+  dependencies**. CORS allowlisting of the page origin is a ring-capture-side dependency.
 - After editing `messageKeys` in `package.json`, run `pebble clean`.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.
-- Keep the capacity constant in `goalgrid.h` and `pkjs/grid_data.js` in sync.
-- The data contract is schema v1 (documented in `tools/gen_fixtures.py`). Regenerate
-  fixtures with that script; `fixtures_current` fails if they drift.
+- Keep `GOALGRID_CAPACITY`, `GOALGRID_MAX_GOALS`, `GOALGRID_NAME_LEN` in `goalgrid.h` and
+  their copies at the top of `pkjs/wire.js` in sync.
+- The data contract is ring-capture's `GET /grid` schema 2 (raw UTC events, half-open
+  `[from, to)` ms window); `tests/contract/` holds a golden response and
+  `tools/gen_fixtures.py` generates fixtures in that shape (`fixtures_current` fails if
+  they drift). The watch defines "today"; the client buckets events into local days
+  (`pkjs/calendar.js`). Never do calendar logic on the service side, and test any
+  calendar change under real timezones including DST.
 
 ## Reviewing the running UI (agents)
 
 The agent sandbox cannot start an emulator but can drive one the user already started
-(`pebble install|screenshot|emu-tap --emulator emery`). Judge layout with
+(`pebble install|screenshot --emulator emery` and `tools/push_fixture.js`). Judge layout with
 `tools/measure.py` numbers and `tools/contact_sheet.py`, not by eye. Pasted screenshots
 may be dimmed; trust fresh ones. Details in `CLAUDE.md`.
 

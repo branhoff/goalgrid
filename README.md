@@ -5,8 +5,10 @@ completion: previous week, current week, and next week, with each past day shade
 how many of its goals were met. Targets every Pebble platform including the Pebble
 Time 2 (`emery`).
 
-> Status: UI-first phase. The calendar is fed by fixture data; a separate service will
-> later emit the same schema-v1 data.
+> Status: the watch fetches real data from a ring-capture service (or an empty grid when
+> none is configured). Verified end-to-end against production on the emulator (signup token
+> → webhook log → grid update). Onboarding now runs from a hosted config page that generates
+> the token itself (see below).
 
 ## Quick start
 
@@ -29,37 +31,113 @@ Install the tool once (`uv tool install pebble-tool --python 3.13`, then
 
 ```bash
 pebble build
-pebble install --emulator emery        # then pick "Goal Grid" from the watch's watchface menu
-pebble emu-tap --emulator emery --direction z+   # cycle fixture scenarios
+pebble install --emulator emery          # then pick "Goal Grid" from the watchface menu
 ```
 
-Watchfaces cannot read buttons, so a wrist tap cycles the fixtures.
+With no service configured it shows an empty grid. To review every fixture scenario, push
+fixtures to the watch directly:
+
+```bash
+node tools/push_fixture.js perfect --emulator emery     # one scenario
+uv run tools/contact_sheet.py emery                     # all scenarios -> shots/contact.png
+```
+
+These send the same AppMessage the phone would, so the watch's real handler runs.
+
+### Pointing it at your ring-capture service
+
+The watch's service URL and bearer token live in the phone's `localStorage` (never on the
+watch). ring-capture is multi-tenant: each person has their own token, which is the only
+secret. The config page is a small static page hosted on GitHub Pages
+(`web/`, deployed by `.github/workflows/pages.yml` to `https://branhoff.github.io/goalgrid/`)
+that can generate that token itself — so onboarding no longer needs an outside browser.
+
+**Onboarding (one token, two places):**
+
+1. Open the watchface config page (Pebble app → Goal Grid → Settings, or
+   `pebble emu-app-config --emulator emery`). Tap **Generate token** — it calls the service's
+   `POST /signup` and fills the Token field. (If a token already exists it confirms first, since
+   generating mints a *new* identity that won't see your old goals. The token is shown once —
+   copy it before leaving the page.)
+2. Copy the token into the Pebble app's **Index webhook** `Authorization: Bearer <token>`
+   header (the write path — how your captures reach the service). This is the one manual step
+   the page can't do for you; it's a separate Index-app setting. The page spells this out next
+   to the token.
+3. Tap **Save**. The token is also the read path (how the grid is fetched); the service URL
+   comes prefilled. An empty token means "not configured yet": the watch shows an empty grid
+   until both URL and token are set. If the service rejects the token (401/403), the grid is
+   cleared so stale data can't look live.
+
+Two staged dependencies make the page fully live: GitHub Pages must be enabled (repo Settings
+→ Pages → Source = "GitHub Actions"), and ring-capture must CORS-allowlist the page's origin
+(`https://branhoff.github.io/goalgrid/`) for the Generate button's `fetch` to succeed. Until
+the CORS allowlist lands, manual token entry + Save still works; Generate reports a clear
+CORS/offline message. The config page URL is a single constant (`CONFIG_URL`) in
+`src/pkjs/config.js`.
+
+For development, keep named **profiles** in `config/profiles.json` (gitignored — copy
+`config/profiles.example.json` and fill in your URLs and per-user tokens) and swap between
+them in one command:
+
+```bash
+make config PROFILE=prod     # write the "prod" profile, then reinstall so the watch refetches
+make config-local            # shorthand for PROFILE=local
+make config-prod             # shorthand for PROFILE=prod
+```
+
+`make config` writes the chosen profile straight into the emulator's `localStorage` with
+`tools/set_config.py` (stdlib only), then reinstalls so PebbleKit JS restarts, fires
+`READY`, and fetches from the newly-pointed service. It runs on the host (needs the host
+emulator). Secrets stay out of git; only `profiles.example.json` is committed.
+
+To check a deployed service end to end without changing the watch's config, `make live`
+builds the same `GET /grid` request the phone would, fetches it with the token, and pushes
+the result to a running emulator through the real wire pipeline (writes the response to
+`shots/live_response.json`):
+
+```bash
+AUTH_TOKEN=... GOALGRID_URL=https://your-service.example make live   # [EMULATOR=emery]
+```
+
+It runs on the host (not in the dev container) because it needs the host network and the
+running emulator.
 
 ## How it works
 
 ```
-tools/gen_fixtures.py ──► src/pkjs/fixtures/*.json        (schema v1 test scenarios)
-                               │
-src/pkjs/index.js  ── reads a fixture, sends it over AppMessage on startup / tap
-src/pkjs/grid_data.js  pure conversion: schema v1 ─► [completed,total] byte pairs
-                               │  Bluetooth
-src/c/main.c       ── receives it, loads the model, draws time + date + calendar
-src/c/model/       ── pure C: calendar math, intensity levels, wire decoding (host-tested)
-src/c/ui/          ── MatrixLayer: draws the 3-week grid
+watch                                          phone (PebbleKit JS)              service
+main.c  <-- READY ---------------------------- index.js (on start)               ring-capture
+        -- REQUEST_GRID + its own local day --> service.js  GET /grid?from=&to= ->  /grid
+        <-- GRID_EPOCH_DAY/TYPES/NAMES/VALUES -- wire.js buckets raw events   <--  raw UTC events
+model/  goalgrid.c  pure C: per-goal series, calendar math, strict payload loading
+ui/     matrix_layer.c  draws the 3-week calendar;  model/layout.c  screen geometry
 ```
 
-### Data contract (schema v1)
+- The **watch defines "today"**: it sends its local calendar day with every request. The
+  phone turns the 21 local days ending then into a half-open UTC instant window
+  `[from, to)` and asks the service for exactly that. It re-requests every 30 minutes.
+- The **client owns the calendar**: the service stores raw UTC events and knows no
+  timezone, so `wire.js` buckets each event into the phone's local day (`calendar.js`,
+  DST-aware). A `count` goal sums its events in a day; a `binary` goal is done if any
+  event falls in it.
+- With **no service configured**, the phone sends an empty grid (no goals). If the service
+  is unreachable the watch keeps showing its last saved grid.
+
+### Data contract
+
+The authority is ring-capture's `GET /grid` (schema 2, currently uncommitted in that
+repo). Fixtures are generated in that shape by `tools/gen_fixtures.py`, and
+`tests/contract/grid-response.json` mirrors the service's own test (same values).
 
 ```json
-{
-  "version": 1,
-  "goals": [{"id": "read", "name": "Read 20 min"}],
-  "days": [{"date": "2026-10-02", "completed": ["read"]}]
-}
+{"schema": 2, "from": 1717200000000, "to": 1719792000000,
+ "goals": [{"id": 1, "number": 1, "name": "running", "type": "binary"}],
+ "series": {"1": [{"at": 1717243800000, "value": 1}]}}
 ```
 
-The newest day is treated as "today", so fixtures never go stale. Days with nothing
-completed may be omitted. Unknown or duplicate goal ids are ignored.
+`from`/`to` are epoch milliseconds, inclusive/exclusive. Events are raw, append-only and
+time-sorted; two events may share an instant. The watch keeps at most 5 goals, ordered
+by `number`, with names cut to 15 characters. Count totals are clamped to 0-255.
 
 ## Design decisions
 
@@ -68,6 +146,8 @@ completed may be omitted. Unknown or duplicate goal ids are ignored.
 - **Reject bad input, never half-apply it.** `goalgrid_load` returns an error on a
   malformed payload and leaves the grid untouched; a missing grid draws as empty.
 - **Idempotent sync.** The phone always sends the whole grid, so a retry is harmless.
+- **Total view first.** Each day currently shades by how many goals had any progress;
+  the per-goal views are the next step and the stored per-goal series already supports them.
 - **Future days are outlined, not filled**, so they are never mistaken for "nothing done".
 
 ## Known limitations
@@ -76,5 +156,7 @@ completed may be omitted. Unknown or duplicate goal ids are ignored.
   has no Linux arm64 build.
 - Emulator UI review is manual (or agent-assisted via `tools/measure.py`); it is not
   part of the automated gate.
-- Only `emery` has been visually checked; round (`chalk`) and small screens
-  (`aplite`, `diorite`) have not.
+- Visually checked on `emery`, `chalk` (round), `aplite`, and `diorite`. Not yet seen:
+  `basalt`, `flint`, `gabbro`.
+- One-bit screens (`aplite`, `diorite`) show four states, not five shades: outline
+  (nothing done), double outline (some done), solid (all done), plain number (future).

@@ -3,12 +3,12 @@
 # requires-python = ">=3.11"
 # dependencies = ["pillow"]
 # ///
-"""Cycle every fixture on a RUNNING emulator and save a contact sheet.
+"""Push every fixture into a RUNNING emulator and save a contact sheet.
 
-Usage: tools/contact_sheet.py [platform] [count]      (default: emery 7)
+Usage: tools/contact_sheet.py [platform]      (default: emery)
 Needs the watchface installed and the emulator already running (starting an
-emulator needs network access the agent sandbox blocks). Fixtures advance with
-a simulated wrist tap, since watchfaces can't receive button presses.
+emulator needs network access the agent sandbox blocks). Each fixture is sent as the
+same AppMessage the phone would send (tools/push_fixture.js), then screenshotted.
 Writes shots/contact.png (2x nearest-neighbour) and shots/f<N>.png.
 """
 
@@ -19,29 +19,29 @@ import time
 
 from PIL import Image
 
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+FIXTURES = sorted(p.stem for p in (ROOT / "src" / "pkjs" / "fixtures").glob("*.json"))
 platform = sys.argv[1] if len(sys.argv) > 1 else "emery"
-count = int(sys.argv[2]) if len(sys.argv) > 2 else 7
-out = pathlib.Path(__file__).resolve().parent.parent / "shots"
+out = ROOT / "shots"
 out.mkdir(exist_ok=True)
 
 
-def pebble(*args):
-    subprocess.run(
-        ["pebble", *args, "--emulator", platform],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+def run(*command):
+    """Run quietly, but fail loudly: a silent failure once gave seven identical screenshots."""
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        sys.exit(f"failed: {' '.join(command)}\n{result.stdout}{result.stderr}")
 
 
 files = []
-for i in range(count):
-    f = out / f"f{i}.png"
-    pebble("screenshot", "--no-open", str(f))
-    files.append(f)
-    pebble("emu-tap", "--direction", "z+")
-    time.sleep(3)
+for index, name in enumerate(FIXTURES):
+    run("node", str(ROOT / "tools" / "push_fixture.js"), name, "--emulator", platform)
+    time.sleep(2)
+    shot = out / f"f{index}.png"
+    run("pebble", "screenshot", "--no-open", "--emulator", platform, str(shot))
+    files.append(shot)
 
+count = len(files)
 ims = [Image.open(f).convert("RGB") for f in files]
 w, h = ims[0].size
 cols = 4
