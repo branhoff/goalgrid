@@ -36,8 +36,9 @@ static GColor prv_text_color(uint8_t level) {
 // four states: outline (nothing done), double outline (some done), solid (all done).
 static void prv_paint_body(GContext *ctx, GRect rect, uint8_t level) {
 #ifdef PBL_COLOR
+  // SpringBud (#AAFF00) read yellow on hardware; ScreaminGreen is a true, brighter light green.
   static const GColor palette[GOALGRID_LEVELS] = {
-      GColorDarkGray, GColorDarkGreen, GColorIslamicGreen, GColorGreen, GColorSpringBud,
+      GColorDarkGray, GColorDarkGreen, GColorIslamicGreen, GColorGreen, GColorScreaminGreen,
   };
   graphics_context_set_fill_color(ctx, palette[level]);
   graphics_fill_rect(ctx, rect, 0, GCornerNone);
@@ -61,8 +62,14 @@ static void prv_paint_body(GContext *ctx, GRect rect, uint8_t level) {
 
 static void prv_mark_today(GContext *ctx, GRect rect, uint8_t level) {
 #ifdef PBL_COLOR
+  // A 1px red outline is nearly invisible on-watch: use a 2px border plus a top-left square.
   graphics_context_set_stroke_color(ctx, GColorRed);
   graphics_draw_rect(ctx, rect);
+  graphics_draw_rect(ctx, grect_crop(rect, 1));
+  graphics_context_set_fill_color(ctx, GColorRed);
+  graphics_fill_rect(ctx,
+                     GRect(rect.origin.x + 1, rect.origin.y + 1, TODAY_MARK_SIZE, TODAY_MARK_SIZE),
+                     0, GCornerNone);
 #else
   graphics_context_set_fill_color(ctx, prv_text_color(level));
   graphics_fill_rect(ctx,

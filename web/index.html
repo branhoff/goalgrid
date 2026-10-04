@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goal Grid</title>
+<style>
+  body { font-family: -apple-system, Roboto, Helvetica, sans-serif; margin: 0; padding: 20px;
+    background: #f2f2f2; color: #1a1a1a; }
+  h3 { margin: 0 0 4px; }
+  p.hint { margin: 0 0 16px; color: #666; font-size: 13px; line-height: 1.4; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc;
+    border-radius: 6px; background: #fff; color: #1a1a1a; }
+  button { width: 100%; margin-top: 12px; padding: 12px; font-size: 16px; font-weight: 600; border: none;
+    border-radius: 6px; background: #ff4700; color: #fff; }
+  button.secondary { background: #fff; color: #ff4700; border: 1px solid #ff4700; }
+  .note { margin: 10px 0 0; font-size: 12px; color: #666; line-height: 1.4; }
+  .note code { background: #e6e6e6; padding: 1px 4px; border-radius: 3px; }
+  #status { margin-top: 10px; font-size: 13px; line-height: 1.4; min-height: 1em; }
+  #status.ok { color: #1a7f37; }
+  #status.err { color: #c62828; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 22px 0; }
+</style>
+</head>
+<body>
+  <h3>Goal Grid</h3>
+  <p class="hint">Generate a token below, paste it into your Index ring's webhook, then Save.</p>
+
+  <label for="u">Service URL</label>
+  <input id="u" placeholder="https://your-service.example">
+
+  <label for="t">Token</label>
+  <input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <button id="gen">Generate token</button>
+  <button id="copy" class="secondary">Copy token</button>
+  <p class="note">Paste this token into your Index ring's webhook
+    <code>Authorization: Bearer &lt;token&gt;</code> header. That write path is a separate
+    Index-app setting this page can't set for you. The token is shown once &mdash; if you lose
+    it, Generate mints a new identity that won't see your old goals.</p>
+  <div id="status"></div>
+
+  <hr>
+  <button id="save">Save</button>
+
+  <script src="onboard.js"></script>
+  <script>
+  (function () {
+    var params = onboard.parseParams(location.search, location.hash);
+    var url = document.getElementById('u');
+    var token = document.getElementById('t');
+    var status = document.getElementById('status');
+    url.value = params.baseUrl;
+    token.value = params.token;
+
+    function setStatus(text, kind) {
+      status.textContent = text;
+      status.className = kind || '';
+    }
+
+    function generate() {
+      if (onboard.needsOverwriteConfirm(token.value) &&
+          !confirm('This creates a new identity and won\'t see your old goals — continue?')) {
+        return;
+      }
+      var req = onboard.signupRequest(url.value);
+      setStatus('Generating…', '');
+      fetch(req.url, { method: req.method, headers: req.headers, body: req.body })
+        .then(function (resp) {
+          return resp.text().then(function (body) {
+            var result = onboard.classifySignup(resp.status, function (name) {
+              return resp.headers.get(name);
+            }, body);
+            if (result.kind === 'ok') {
+              token.value = result.token;
+              setStatus('Token generated. Copy it into your Index webhook, then Save.', 'ok');
+            } else {
+              setStatus(result.message, 'err');
+            }
+          });
+        })
+        .catch(function () {
+          setStatus('Could not reach the service. It may not allow this page yet (CORS), ' +
+            'or you are offline.', 'err');
+        });
+    }
+
+    function copyToken() {
+      if (!token.value) {
+        return setStatus('No token to copy yet — Generate one first.', 'err');
+      }
+      token.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(token.value).then(function () {
+          setStatus('Token copied.', 'ok');
+        }, function () {
+          setStatus('Select the token field and copy manually.', '');
+        });
+      } else {
+        setStatus('Select the token field and copy manually.', '');
+      }
+    }
+
+    function save() {
+      location.href = onboard.buildReturnUrl(params.returnTo, url.value, token.value);
+    }
+
+    document.getElementById('gen').addEventListener('click', generate);
+    document.getElementById('copy').addEventListener('click', copyToken);
+    document.getElementById('save').addEventListener('click', save);
+  })();
+  </script>
+</body>
+</html>

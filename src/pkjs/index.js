@@ -4,7 +4,6 @@ var config = require('./config');
 var service = require('./service');
 var wire = require('./wire');
 
-var DEMO_FIXTURE = require('./fixtures/mixed.json');
 var clock = calendar.localClock();
 
 // Watch -> phone: REQUEST_GRID carries the watch's own local epoch day ("today").
@@ -31,14 +30,26 @@ function deliver(response, epochDay) {
   }
 }
 
+// No goals means no TYPES/VALUES arrays: the watch draws a date-only, empty grid. Used when
+// unconfigured or when the service rejects the token -- never fake data that could pass for real.
+function sendEmptyGrid(epochDay) {
+  sendGrid({ epochDay: epochDay, names: '', types: [], values: [] });
+}
+
 function handleRequest(epochDay) {
   var settings = config.load(localStorage);
   if (!config.isConfigured(settings)) {
-    console.log('no service configured: demo data');
-    return deliver(wire.rebaseToToday(DEMO_FIXTURE, epochDay), epochDay);
+    console.log('not configured: empty grid');
+    return sendEmptyGrid(epochDay);
   }
   service.fetchGrid(settings, epochDay, clock, function (error, response) {
     if (error) {
+      if (error.status === 401 || error.status === 403) {
+        // Auth failure (missing/invalid/revoked/wrong-tenant token): clear the grid so a
+        // stale one can't masquerade as live data. Transient errors keep the last grid.
+        console.log('unauthorized: check token');
+        return sendEmptyGrid(epochDay);
+      }
       return console.log('grid fetch failed: ' + error.message);
     }
     deliver(response, epochDay);

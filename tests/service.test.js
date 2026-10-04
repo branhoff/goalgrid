@@ -50,8 +50,10 @@ test('reports HTTP errors, bad JSON, network errors and timeouts', async () => {
   const config = { baseUrl: 'https://x.example', token: '' };
   const http = await run(config, (r) => { r.status = 401; r.onload(); });
   assert.strictEqual(http.error.message, 'HTTP 401');
+  assert.strictEqual(http.error.status, 401);  // 401 is tagged so index.js can clear the grid
   const detailed = await run(config, (r) => { r.status = 400; r.responseText = '{"error":"invalid from: x"}'; r.onload(); });
   assert.strictEqual(detailed.error.message, 'HTTP 400: invalid from: x');
+  assert.strictEqual(detailed.error.status, 400);  // every non-200 is tagged, so index.js can match 403 too
   const json = await run(config, (r) => { r.status = 200; r.responseText = '<html>'; r.onload(); });
   assert.match(json.error.message, /invalid JSON/);
   const net = await run(config, (r) => r.onerror());

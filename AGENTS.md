@@ -79,6 +79,12 @@ something is skipped or failing, say so plainly with the output.
   goal-view stepping must share or re-use this gesture, not assume it is free. Dev-only
   fixture selection never lives on the watch (use `tools/push_fixture.js`).
 - `src/pkjs/` must stay **ES5** (PebbleKit JS); a test enforces it.
+- The watchface's config/onboarding page is a static page in `web/`, deployed to GitHub Pages
+  by `.github/workflows/pages.yml`; the watch opens it via `CONFIG_URL` in `src/pkjs/config.js`.
+  It must be hosted (not a `data:` URL) because its `POST /signup` `fetch` needs a real,
+  CORS-allowlistable origin. Keep the split: pure logic in `web/onboard.js` (unit-tested,
+  coverage-gated) and thin DOM/fetch glue in `web/index.html` (review-only). The page has **no
+  dependencies**. CORS allowlisting of the page origin is a ring-capture-side dependency.
 - After editing `messageKeys` in `package.json`, run `pebble clean`.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.
 - Keep `GOALGRID_CAPACITY`, `GOALGRID_MAX_GOALS`, `GOALGRID_NAME_LEN` in `goalgrid.h` and

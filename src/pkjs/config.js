@@ -1,8 +1,16 @@
 'use strict';
-// Service URL + token, stored in the phone's localStorage. Pure helpers plus a
-// hand-written settings page (no Clay dependency); see tests/config.test.js.
+// Service URL + token, stored in the phone's localStorage. Pure helpers plus the URL of the
+// hosted settings/onboarding page (web/index.html); see tests/config.test.js.
 
 var STORAGE_KEY = 'goalgridConfig';
+
+// The hosted config page (GitHub Pages). A real origin is required: the page's Generate-token
+// fetch needs a CORS-allowlistable origin, which a data: URL (opaque origin) cannot provide.
+var CONFIG_URL = 'https://branhoff.github.io/goalgrid/';
+
+// Prefilled into the settings page so a new user only has to generate a token. Not a secret
+// (the token is); still editable in the field for anyone pointing at a different service.
+var DEFAULT_BASE_URL = 'https://ring-capture-nnkovzej6q-uw.a.run.app';
 
 function load(store) {
   try {
@@ -18,7 +26,9 @@ function save(store, config) {
 }
 
 function isConfigured(config) {
-  return config.baseUrl !== '';
+  // A token is mandatory now that the service is multi-tenant: no token always 401s, so an
+  // unconfigured token means "not set up yet" (show demo), not "fetch and fail".
+  return config.baseUrl !== '' && config.token !== '';
 }
 
 // Settings-page result: URI-encoded JSON. Returns null if it is not usable.
@@ -35,28 +45,16 @@ function parseResult(response) {
   }
 }
 
-function escapeAttr(text) {
-  return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function pageHtml(config) {
-  return '<!DOCTYPE html><meta name="viewport" content="width=device-width">' +
-    '<body style="font-family:sans-serif;padding:1em"><h3>Goal Grid</h3>' +
-    '<p>Service URL<br><input id="u" style="width:100%" value="' + escapeAttr(config.baseUrl) + '"></p>' +
-    '<p>Token<br><input id="t" type="password" style="width:100%" value="' + escapeAttr(config.token) + '"></p>' +
-    '<button onclick="save()">Save</button><script>' +
-    'function q(k){var m=location.search.substring(1).split("&");for(var i=0;i<m.length;i++){' +
-    'var p=m[i].split("=");if(p[0]===k)return decodeURIComponent(p[1]);}return "pebblejs://close#";}' +
-    'function save(){document.location=q("return_to")+encodeURIComponent(JSON.stringify(' +
-    '{baseUrl:document.getElementById("u").value.trim(),token:document.getElementById("t").value.trim()}));}' +
-    '</script>';
-}
-
+// Opens the hosted page, prefilling the service URL and token in the fragment (never the query)
+// so the secret token stays on the phone and out of the host's server logs. The page reads
+// return_to from the query, which the Pebble app supplies.
 function pageUrl(config) {
-  return 'data:text/html;charset=utf-8,' + encodeURIComponent(pageHtml(config));
+  var url = config.baseUrl || DEFAULT_BASE_URL;
+  return CONFIG_URL + '#baseUrl=' + encodeURIComponent(url) +
+    '&token=' + encodeURIComponent(config.token || '');
 }
 
 module.exports = {
   load: load, save: save, isConfigured: isConfigured, parseResult: parseResult,
-  pageUrl: pageUrl, pageHtml: pageHtml
+  pageUrl: pageUrl, CONFIG_URL: CONFIG_URL, DEFAULT_BASE_URL: DEFAULT_BASE_URL
 };

@@ -38,7 +38,9 @@ function fetchGrid(config, todayEpochDay, clock, callback, makeRequest) {
   request.timeout = TIMEOUT_MS;
   request.onload = function () {
     if (request.status !== 200) {
-      return finish(new Error(failureMessage(request)));
+      var httpError = new Error(failureMessage(request));
+      httpError.status = request.status;  // lets the caller single out 401 (bad/revoked token)
+      return finish(httpError);
     }
     try {
       finish(null, JSON.parse(request.responseText));

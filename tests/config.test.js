@@ -15,13 +15,14 @@ test('defaults when nothing or garbage is stored', () => {
   assert.deepStrictEqual(config.load(store), { baseUrl: '', token: '' });
 });
 
-test('save and load round-trip; configured means a service URL is set', () => {
+test('save and load round-trip; configured means a URL and a token are set', () => {
   const store = memoryStore();
   config.save(store, { baseUrl: 'https://x.example', token: 't' });
   const loaded = config.load(store);
   assert.deepStrictEqual(loaded, { baseUrl: 'https://x.example', token: 't' });
   assert.ok(config.isConfigured(loaded));
   assert.ok(!config.isConfigured({ baseUrl: '', token: 't' }));
+  assert.ok(!config.isConfigured({ baseUrl: 'https://x.example', token: '' }));
 });
 
 test('settings-page results are validated and normalised', () => {
@@ -36,10 +37,19 @@ test('settings-page results are validated and normalised', () => {
   assert.strictEqual(config.parseResult('%E0%A4%A'), null);
 });
 
-test('settings page escapes stored values and is a data URL', () => {
-  const html = config.pageHtml({ baseUrl: 'https://x"><script>', token: 'a&b' });
-  assert.ok(!html.includes('x"><script>'));
-  assert.ok(html.includes('x&quot;&gt;&lt;script&gt;'));
-  assert.ok(html.includes('a&amp;b'));
-  assert.ok(config.pageUrl({ baseUrl: '', token: '' }).startsWith('data:text/html;charset=utf-8,'));
+test('pageUrl points at the hosted config page, prefilled via the fragment', () => {
+  const url = config.pageUrl({ baseUrl: 'https://x.example', token: 'a&b=c' });
+  assert.ok(url.startsWith(config.CONFIG_URL));
+  assert.ok(url.indexOf('?') === -1, 'prefill must ride in the fragment, not the query');
+  const params = new URLSearchParams(url.slice(url.indexOf('#') + 1));
+  assert.strictEqual(params.get('baseUrl'), 'https://x.example');
+  assert.strictEqual(params.get('token'), 'a&b=c');
+});
+
+test('pageUrl prefills the default service URL when none is stored', () => {
+  assert.ok(config.pageUrl({ baseUrl: '', token: '' })
+    .includes(encodeURIComponent(config.DEFAULT_BASE_URL)));
+  // A stored URL still wins over the default.
+  assert.ok(config.pageUrl({ baseUrl: 'https://mine.example', token: '' })
+    .includes(encodeURIComponent('https://mine.example')));
 });

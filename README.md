@@ -5,8 +5,10 @@ completion: previous week, current week, and next week, with each past day shade
 how many of its goals were met. Targets every Pebble platform including the Pebble
 Time 2 (`emery`).
 
-> Status: the watch fetches real data from a ring-capture service (or shows demo data when
-> none is configured). Live end-to-end against a running service is still to be verified.
+> Status: the watch fetches real data from a ring-capture service (or an empty grid when
+> none is configured). Verified end-to-end against production on the emulator (signup token
+> → webhook log → grid update). Onboarding now runs from a hosted config page that generates
+> the token itself (see below).
 
 ## Quick start
 
@@ -32,7 +34,8 @@ pebble build
 pebble install --emulator emery          # then pick "Goal Grid" from the watchface menu
 ```
 
-With no service configured it shows demo data. To review every fixture scenario:
+With no service configured it shows an empty grid. To review every fixture scenario, push
+fixtures to the watch directly:
 
 ```bash
 node tools/push_fixture.js perfect --emulator emery     # one scenario
@@ -43,15 +46,38 @@ These send the same AppMessage the phone would, so the watch's real handler runs
 
 ### Pointing it at your ring-capture service
 
-The watch's service URL and bearer token live in the phone's `localStorage` (never in the
-repo or on the watch). For a given deployment you can enter them by hand in the Pebble
-app's settings (or `pebble emu-app-config --emulator emery`) — but that page is a
-hand-written `data:` URL whose acceptance is **unverified**, and clicking through it to
-switch environments is slow.
+The watch's service URL and bearer token live in the phone's `localStorage` (never on the
+watch). ring-capture is multi-tenant: each person has their own token, which is the only
+secret. The config page is a small static page hosted on GitHub Pages
+(`web/`, deployed by `.github/workflows/pages.yml` to `https://branhoff.github.io/goalgrid/`)
+that can generate that token itself — so onboarding no longer needs an outside browser.
+
+**Onboarding (one token, two places):**
+
+1. Open the watchface config page (Pebble app → Goal Grid → Settings, or
+   `pebble emu-app-config --emulator emery`). Tap **Generate token** — it calls the service's
+   `POST /signup` and fills the Token field. (If a token already exists it confirms first, since
+   generating mints a *new* identity that won't see your old goals. The token is shown once —
+   copy it before leaving the page.)
+2. Copy the token into the Pebble app's **Index webhook** `Authorization: Bearer <token>`
+   header (the write path — how your captures reach the service). This is the one manual step
+   the page can't do for you; it's a separate Index-app setting. The page spells this out next
+   to the token.
+3. Tap **Save**. The token is also the read path (how the grid is fetched); the service URL
+   comes prefilled. An empty token means "not configured yet": the watch shows an empty grid
+   until both URL and token are set. If the service rejects the token (401/403), the grid is
+   cleared so stale data can't look live.
+
+Two staged dependencies make the page fully live: GitHub Pages must be enabled (repo Settings
+→ Pages → Source = "GitHub Actions"), and ring-capture must CORS-allowlist the page's origin
+(`https://branhoff.github.io/goalgrid/`) for the Generate button's `fetch` to succeed. Until
+the CORS allowlist lands, manual token entry + Save still works; Generate reports a clear
+CORS/offline message. The config page URL is a single constant (`CONFIG_URL`) in
+`src/pkjs/config.js`.
 
 For development, keep named **profiles** in `config/profiles.json` (gitignored — copy
-`config/profiles.example.json` and fill in your URLs and tokens) and swap between them in
-one command:
+`config/profiles.example.json` and fill in your URLs and per-user tokens) and swap between
+them in one command:
 
 ```bash
 make config PROFILE=prod     # write the "prod" profile, then reinstall so the watch refetches
@@ -94,8 +120,8 @@ ui/     matrix_layer.c  draws the 3-week calendar;  model/layout.c  screen geome
   timezone, so `wire.js` buckets each event into the phone's local day (`calendar.js`,
   DST-aware). A `count` goal sums its events in a day; a `binary` goal is done if any
   event falls in it.
-- With **no service configured**, the phone sends rebased demo data (`fixtures/mixed`).
-  If the service is unreachable the watch keeps showing its last saved grid.
+- With **no service configured**, the phone sends an empty grid (no goals). If the service
+  is unreachable the watch keeps showing its last saved grid.
 
 ### Data contract
 
