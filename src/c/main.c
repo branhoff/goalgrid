@@ -8,6 +8,7 @@
 #define INBOX_SIZE 512
 #define OUTBOX_SIZE 64
 #define REFRESH_MINUTES 30
+#define REFRESH_DEBOUNCE_SEC 10
 
 _Static_assert(sizeof(GoalGrid) <= PERSIST_DATA_MAX_LENGTH, "grid must fit one persist key");
 
@@ -17,6 +18,7 @@ static TextLayer *s_date_layer;
 static MatrixLayer *s_matrix;
 static GoalGrid s_grid;
 static int s_today_weekday;
+static time_t s_last_request;
 
 static uint32_t prv_today_epoch_day(const struct tm *now) {
   return goalgrid_epoch_day(now->tm_year + 1900, now->tm_mon + 1, now->tm_mday);
@@ -39,9 +41,9 @@ static void prv_update(void) {
   static char s_time_buffer[8];
   static char s_date_buffer[16];
   strftime(s_time_buffer, sizeof(s_time_buffer), clock_is_24h_style() ? "%H:%M" : "%l:%M", now);
-  strftime(s_date_buffer, sizeof(s_date_buffer), "%a %b ", now);
-  snprintf(s_date_buffer + strlen(s_date_buffer), sizeof(s_date_buffer) - strlen(s_date_buffer),
-           "%d", now->tm_mday);
+  // Day and weekday are redundant: the grid boxes today under its weekday column, so the
+  // header carries only what the grid can't show -- the month (3-letter) and year.
+  strftime(s_date_buffer, sizeof(s_date_buffer), "%b %Y", now);
   text_layer_set_text(s_time_layer, s_time_buffer[0] == ' ' ? s_time_buffer + 1 : s_time_buffer);
   text_layer_set_text(s_date_layer, s_date_buffer);
 
@@ -60,6 +62,15 @@ static void prv_request_grid(void) {
   dict_write_uint8(out, MESSAGE_KEY_REQUEST_GRID, 1);
   dict_write_uint32(out, MESSAGE_KEY_GRID_EPOCH_DAY, prv_today_epoch_day(localtime(&t)));
   app_message_outbox_send();
+  s_last_request = t;
+}
+
+// A wrist flick lands as a tap/shake: Pebble has no raise-to-wake event, so this is how we
+// refresh when the user looks. Debounced so repeated flicks don't spam the phone.
+static void prv_tap_handler(AccelAxisType axis, int32_t direction) {
+  if (time(NULL) - s_last_request >= REFRESH_DEBOUNCE_SEC) {
+    prv_request_grid();
+  }
 }
 
 static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed) {
@@ -145,9 +156,11 @@ static void prv_init(void) {
                                        });
   window_stack_push(s_window, true);
   tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
+  accel_tap_service_subscribe(prv_tap_handler);
 }
 
 static void prv_deinit(void) {
+  accel_tap_service_unsubscribe();
   tick_timer_service_unsubscribe();
   persist_write_data(PERSIST_KEY_GRID, &s_grid, sizeof(s_grid));
   window_destroy(s_window);

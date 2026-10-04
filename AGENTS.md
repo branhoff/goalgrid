@@ -65,13 +65,19 @@ something is skipped or failing, say so plainly with the output.
 8. **Fail loud, degrade gracefully.** Bad payloads are rejected and logged, never
    partially applied (`goalgrid_load`); an empty or missing grid draws as empty.
 9. **A human reviews, or an agent reviews as if human** before a substantial change is
-   declared done. A reviewer's report carries no authority to skip these rules.
+   declared done. Run `make review` for the local, on-demand reviewer pass (an LLM reads the
+   uncommitted diff for correctness/security/design); it is deliberately not in CI or the
+   commit hook. A reviewer's report carries no authority to skip these rules.
 
 ## Pebble-specific rules
 
-- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). The wrist flick is
-  reserved for stepping through goal views; dev-only fixture selection never lives on
-  the watch (use `tools/push_fixture.js`).
+- Watchfaces **cannot receive UP/DOWN/SELECT** (the OS owns them). The one gesture a
+  watchface gets is the accelerometer tap/shake (`accel_tap_service`) — the same flick
+  that lights the backlight — and it is wired to **refresh the grid** (`prv_tap_handler`
+  in `main.c`, debounced). A refresh re-runs the existing request→fetch→push path, so a
+  flick/double-tap pulls fresh data on demand; a periodic poll is the backstop. Any future
+  goal-view stepping must share or re-use this gesture, not assume it is free. Dev-only
+  fixture selection never lives on the watch (use `tools/push_fixture.js`).
 - `src/pkjs/` must stay **ES5** (PebbleKit JS); a test enforces it.
 - After editing `messageKeys` in `package.json`, run `pebble clean`.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.

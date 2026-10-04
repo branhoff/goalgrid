@@ -43,11 +43,38 @@ These send the same AppMessage the phone would, so the watch's real handler runs
 
 ### Pointing it at your ring-capture service
 
-Open the watchface's settings in the Pebble phone app (or `pebble emu-app-config
---emulator emery`) and enter the service URL and bearer token. They are stored in the
-phone's `localStorage`, never in the repo or on the watch. The settings page is a
-hand-written `data:` URL page (no Clay dependency); whether the Pebble app accepts a
-`data:` URL is **unverified**: if it does not, host the page or adopt Clay.
+The watch's service URL and bearer token live in the phone's `localStorage` (never in the
+repo or on the watch). For a given deployment you can enter them by hand in the Pebble
+app's settings (or `pebble emu-app-config --emulator emery`) — but that page is a
+hand-written `data:` URL whose acceptance is **unverified**, and clicking through it to
+switch environments is slow.
+
+For development, keep named **profiles** in `config/profiles.json` (gitignored — copy
+`config/profiles.example.json` and fill in your URLs and tokens) and swap between them in
+one command:
+
+```bash
+make config PROFILE=prod     # write the "prod" profile, then reinstall so the watch refetches
+make config-local            # shorthand for PROFILE=local
+make config-prod             # shorthand for PROFILE=prod
+```
+
+`make config` writes the chosen profile straight into the emulator's `localStorage` with
+`tools/set_config.py` (stdlib only), then reinstalls so PebbleKit JS restarts, fires
+`READY`, and fetches from the newly-pointed service. It runs on the host (needs the host
+emulator). Secrets stay out of git; only `profiles.example.json` is committed.
+
+To check a deployed service end to end without changing the watch's config, `make live`
+builds the same `GET /grid` request the phone would, fetches it with the token, and pushes
+the result to a running emulator through the real wire pipeline (writes the response to
+`shots/live_response.json`):
+
+```bash
+AUTH_TOKEN=... GOALGRID_URL=https://your-service.example make live   # [EMULATOR=emery]
+```
+
+It runs on the host (not in the dev container) because it needs the host network and the
+running emulator.
 
 ## How it works
 
