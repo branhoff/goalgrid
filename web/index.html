@@ -109,12 +109,13 @@
         return setStatus('Nothing to copy yet.', 'err');
       }
       input.select();
-      function copied() {
-        flash(button);
-        setStatus(label + ' copied.', 'ok');
-      }
+      // Flash on the click itself, not when the clipboard write resolves: write latency scales
+      // with the text, so deferring it made the long service URL flash lag behind the token's.
+      flash(button);
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(input.value).then(copied, function () {
+        navigator.clipboard.writeText(input.value).then(function () {
+          setStatus(label + ' copied.', 'ok');
+        }, function () {
           setStatus('Select the field and copy manually.', '');
         });
       } else {
