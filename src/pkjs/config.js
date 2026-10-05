@@ -11,7 +11,7 @@ var CONFIG_URL = 'https://brandon-hoffman.is-a.dev/goalgrid/';
 
 // Prefilled into the settings page so a new user only has to generate a token. Not a secret
 // (the token is); still editable in the field for anyone pointing at a different service.
-var DEFAULT_BASE_URL = 'https://ring-capture-nnkovzej6q-uw.a.run.app';
+var DEFAULT_BASE_URL = 'https://ring-capture-859396441579.us-west1.run.app';
 
 function load(store) {
   try {

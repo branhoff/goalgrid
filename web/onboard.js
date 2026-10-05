@@ -15,6 +15,11 @@
 
   var CLOSE_URL = 'pebblejs://close#';
 
+  // Prefilled when the opener supplies no service URL (direct visit, or a lost prefill fragment).
+  // Keep in sync with DEFAULT_BASE_URL in src/pkjs/config.js — separate deploy artifacts can't
+  // share the constant; tests/onboard.test.js asserts they match.
+  var DEFAULT_BASE_URL = 'https://ring-capture-859396441579.us-west1.run.app';
+
   function safeDecode(value) {
     try {
       return decodeURIComponent(value);
@@ -112,6 +117,7 @@
   }
 
   return {
+    DEFAULT_BASE_URL: DEFAULT_BASE_URL,
     parseParams: parseParams,
     signupRequest: signupRequest,
     classifySignup: classifySignup,

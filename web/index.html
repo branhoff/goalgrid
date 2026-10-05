@@ -29,6 +29,7 @@
 
   <label for="u">Service URL</label>
   <input id="u" placeholder="https://your-service.example">
+  <button id="copyUrl" class="secondary">Copy service URL</button>
 
   <label for="t">Token</label>
   <input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -50,7 +51,9 @@
     var url = document.getElementById('u');
     var token = document.getElementById('t');
     var status = document.getElementById('status');
-    url.value = params.baseUrl;
+    // Default the service URL when the opener supplies none (direct visit or a lost prefill
+    // fragment), so the field is never just a greyed-out placeholder.
+    url.value = params.baseUrl || onboard.DEFAULT_BASE_URL;
     token.value = params.token;
 
     function setStatus(text, kind) {
@@ -85,19 +88,19 @@
         });
     }
 
-    function copyToken() {
-      if (!token.value) {
-        return setStatus('No token to copy yet — Generate one first.', 'err');
+    function copyField(input, label) {
+      if (!input.value) {
+        return setStatus('Nothing to copy yet.', 'err');
       }
-      token.select();
+      input.select();
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(token.value).then(function () {
-          setStatus('Token copied.', 'ok');
+        navigator.clipboard.writeText(input.value).then(function () {
+          setStatus(label + ' copied.', 'ok');
         }, function () {
-          setStatus('Select the token field and copy manually.', '');
+          setStatus('Select the field and copy manually.', '');
         });
       } else {
-        setStatus('Select the token field and copy manually.', '');
+        setStatus('Select the field and copy manually.', '');
       }
     }
 
@@ -106,7 +109,12 @@
     }
 
     document.getElementById('gen').addEventListener('click', generate);
-    document.getElementById('copy').addEventListener('click', copyToken);
+    document.getElementById('copyUrl').addEventListener('click', function () {
+      copyField(url, 'Service URL');
+    });
+    document.getElementById('copy').addEventListener('click', function () {
+      copyField(token, 'Token');
+    });
     document.getElementById('save').addEventListener('click', save);
   })();
   </script>
