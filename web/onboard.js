@@ -15,9 +15,9 @@
 
   var CLOSE_URL = 'pebblejs://close#';
 
-  // Prefilled when the opener supplies no service URL (direct visit, or a lost prefill fragment).
-  // Keep in sync with DEFAULT_BASE_URL in src/pkjs/config.js — separate deploy artifacts can't
-  // share the constant; tests/onboard.test.js asserts they match.
+  // The app-owned service URL the page pins for Generate and Copy (the fragment's baseUrl is
+  // never trusted). Keep in sync with DEFAULT_BASE_URL in src/pkjs/config.js — separate deploy
+  // artifacts can't share the constant; tests/onboard.test.js asserts they match.
   var DEFAULT_BASE_URL = 'https://ring-capture-859396441579.us-west1.run.app';
 
   function safeDecode(value) {
@@ -44,13 +44,13 @@
     return out;
   }
 
-  // Prefill (baseUrl/token) rides in the fragment so the secret token never reaches the
-  // host's server logs; return_to comes from the query (how the Pebble app supplies it).
+  // The token prefill rides in the fragment so the secret never reaches the host's server logs;
+  // return_to comes from the query (how the Pebble app supplies it). The service URL is never
+  // read from the fragment — it is app-owned, so the page pins its own DEFAULT_BASE_URL.
   function parseParams(search, hash) {
     var query = parsePairs(search);
     var frag = parsePairs(hash);
     return {
-      baseUrl: frag.baseUrl || '',
       token: frag.token || '',
       returnTo: query.return_to || CLOSE_URL
     };
@@ -111,9 +111,9 @@
     return String(currentToken || '').trim() !== '';
   }
 
-  function buildReturnUrl(returnTo, baseUrl, token) {
-    var payload = { baseUrl: String(baseUrl || '').trim(), token: String(token || '').trim() };
-    return returnTo + encodeURIComponent(JSON.stringify(payload));
+  // The URL is read-only on the page (app-owned), so Save only returns the token.
+  function buildReturnUrl(returnTo, token) {
+    return returnTo + encodeURIComponent(JSON.stringify({ token: String(token || '').trim() }));
   }
 
   return {

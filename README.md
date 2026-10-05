@@ -46,9 +46,11 @@ These send the same AppMessage the phone would, so the watch's real handler runs
 
 ### Pointing it at your ring-capture service
 
-The watch's service URL and bearer token live in the phone's `localStorage` (never on the
-watch). ring-capture is multi-tenant: each person has their own token, which is the only
-secret. The config page is a small static page hosted on GitHub Pages
+The watch's bearer token lives in the phone's `localStorage` (never on the watch); the service
+URL is owned by the app build (a single `DEFAULT_BASE_URL` constant), so a new app version
+re-points every install automatically and the URL is shown read-only on the config page.
+ring-capture is multi-tenant: each person has their own token, which is the only secret. The
+config page is a small static page hosted on GitHub Pages
 (`web/`, deployed by `.github/workflows/pages.yml`, served at
 `https://brandon-hoffman.is-a.dev/goalgrid/` via the account's custom domain)
 that can generate that token itself — so onboarding no longer needs an outside browser.
@@ -56,18 +58,20 @@ that can generate that token itself — so onboarding no longer needs an outside
 **Onboarding (one token, two places):**
 
 1. Open the watchface config page (Pebble app → Goal Grid → Settings, or
-   `pebble emu-app-config --emulator emery`). Tap **Generate token** — it calls the service's
-   `POST /signup` and fills the Token field. (If a token already exists it confirms first, since
-   generating mints a *new* identity that won't see your old goals. The token is shown once —
-   copy it before leaving the page.)
+   `pebble emu-app-config --emulator emery`). Tap **Generate token** — it calls `POST /signup` on
+   the app's built-in service URL and fills the Token field, so the token is minted against the
+   same service the installed app version fetches from. (If a token already exists it confirms
+   first, since generating mints a *new* identity that won't see your old goals. The token is
+   shown once — copy it before leaving the page.)
 2. Copy the token into the Pebble app's **Index webhook** `Authorization: Bearer <token>`
    header (the write path — how your captures reach the service). This is the one manual step
    the page can't do for you; it's a separate Index-app setting. The page spells this out next
    to the token.
-3. Tap **Save**. The token is also the read path (how the grid is fetched); the service URL
-   comes prefilled. An empty token means "not configured yet": the watch shows an empty grid
-   until both URL and token are set. If the service rejects the token (401/403), the grid is
-   cleared so stale data can't look live.
+3. Tap **Save token to watchface**. The token is also the read path (how the grid is fetched).
+   The service URL is set by the app and shown read-only (copy it for your Index webhook URL); a
+   new app version re-points existing installs without touching your token. An empty token means
+   "not configured yet": the watch shows an empty grid until a token is set. If the service
+   rejects the token (401/403), the grid is cleared so stale data can't look live.
 
 Two staged dependencies make the page fully live: GitHub Pages must be enabled (repo Settings
 → Pages → Source = "GitHub Actions"), and ring-capture must CORS-allowlist the page's origin
@@ -88,9 +92,11 @@ make config-prod             # shorthand for PROFILE=prod
 ```
 
 `make config` writes the chosen profile straight into the emulator's `localStorage` with
-`tools/set_config.py` (stdlib only), then reinstalls so PebbleKit JS restarts, fires
-`READY`, and fetches from the newly-pointed service. It runs on the host (needs the host
-emulator). Secrets stay out of git; only `profiles.example.json` is committed.
+`tools/set_config.py` (stdlib only) under a dev-only `baseUrlOverride` key that `config.js`
+honours (end users never have it, so their installs always use the app's built-in URL), then
+reinstalls so PebbleKit JS restarts, fires `READY`, and fetches from the newly-pointed service.
+It runs on the host (needs the host emulator). Secrets stay out of git; only
+`profiles.example.json` is committed.
 
 To check a deployed service end to end without changing the watch's config, `make live`
 builds the same `GET /grid` request the phone would, fetches it with the token, and pushes

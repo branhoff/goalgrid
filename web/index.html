@@ -12,6 +12,7 @@
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 4px; }
   input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc;
     border-radius: 6px; background: #fff; color: #1a1a1a; }
+  input[readonly] { background: #ececec; color: #555; }
   button { width: 100%; margin-top: 12px; padding: 12px; font-size: 16px; font-weight: 600; border: none;
     border-radius: 6px; background: #ff4700; color: #fff; cursor: pointer;
     transition: transform 0.08s ease, background-color 0.15s ease, box-shadow 0.12s ease; }
@@ -34,11 +35,13 @@
 </head>
 <body>
   <h3>Goal Grid</h3>
-  <p class="hint">Generate a token below, paste it into your Index ring's webhook, then Save.</p>
+  <p class="hint">Generate a token, paste it into your Index ring's webhook, then save it to the
+    watchface.</p>
 
   <label for="u">Service URL</label>
-  <input id="u" placeholder="https://your-service.example">
+  <input id="u" readonly>
   <button id="copyUrl" class="secondary">Copy service URL</button>
+  <p class="note">Set by the app &mdash; copy it into your Index ring's webhook URL.</p>
 
   <label for="t">Token</label>
   <input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -51,7 +54,7 @@
   <div id="status"></div>
 
   <hr>
-  <button id="save">Save</button>
+  <button id="save">Save token to watchface</button>
 
   <script src="onboard.js"></script>
   <script>
@@ -60,9 +63,9 @@
     var url = document.getElementById('u');
     var token = document.getElementById('t');
     var status = document.getElementById('status');
-    // Default the service URL when the opener supplies none (direct visit or a lost prefill
-    // fragment), so the field is never just a greyed-out placeholder.
-    url.value = params.baseUrl || onboard.DEFAULT_BASE_URL;
+    // The service URL is app-owned: always use the page's own constant, never a value from the
+    // fragment, so a crafted #baseUrl= can't make Generate POST to (or Copy copy) an attacker URL.
+    url.value = onboard.DEFAULT_BASE_URL;
     token.value = params.token;
 
     function setStatus(text, kind) {
@@ -124,7 +127,12 @@
     }
 
     function save() {
-      location.href = onboard.buildReturnUrl(params.returnTo, url.value, token.value);
+      // An empty token clears the watchface's saved token; confirm so a stray tap can't wipe it.
+      if (!token.value.trim() &&
+          !confirm('No token entered — this clears the watchface\'s saved token. Continue?')) {
+        return;
+      }
+      location.href = onboard.buildReturnUrl(params.returnTo, token.value);
     }
 
     document.getElementById('gen').addEventListener('click', generate);
