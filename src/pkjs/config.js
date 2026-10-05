@@ -4,9 +4,10 @@
 
 var STORAGE_KEY = 'goalgridConfig';
 
-// The hosted config page (GitHub Pages). A real origin is required: the page's Generate-token
-// fetch needs a CORS-allowlistable origin, which a data: URL (opaque origin) cannot provide.
-var CONFIG_URL = 'https://branhoff.github.io/goalgrid/';
+// The hosted config page (GitHub Pages, served via the account's custom domain). A real origin
+// is required: the page's Generate-token fetch needs a CORS-allowlistable origin, which a data:
+// URL (opaque origin) cannot provide. github.io 301-redirects here, so this is the real origin.
+var CONFIG_URL = 'https://brandon-hoffman.is-a.dev/goalgrid/';
 
 // Prefilled into the settings page so a new user only has to generate a token. Not a secret
 // (the token is); still editable in the field for anyone pointing at a different service.

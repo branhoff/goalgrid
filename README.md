@@ -49,7 +49,8 @@ These send the same AppMessage the phone would, so the watch's real handler runs
 The watch's service URL and bearer token live in the phone's `localStorage` (never on the
 watch). ring-capture is multi-tenant: each person has their own token, which is the only
 secret. The config page is a small static page hosted on GitHub Pages
-(`web/`, deployed by `.github/workflows/pages.yml` to `https://branhoff.github.io/goalgrid/`)
+(`web/`, deployed by `.github/workflows/pages.yml`, served at
+`https://brandon-hoffman.is-a.dev/goalgrid/` via the account's custom domain)
 that can generate that token itself — so onboarding no longer needs an outside browser.
 
 **Onboarding (one token, two places):**
@@ -70,10 +71,11 @@ that can generate that token itself — so onboarding no longer needs an outside
 
 Two staged dependencies make the page fully live: GitHub Pages must be enabled (repo Settings
 → Pages → Source = "GitHub Actions"), and ring-capture must CORS-allowlist the page's origin
-(`https://branhoff.github.io/goalgrid/`) for the Generate button's `fetch` to succeed. Until
-the CORS allowlist lands, manual token entry + Save still works; Generate reports a clear
-CORS/offline message. The config page URL is a single constant (`CONFIG_URL`) in
-`src/pkjs/config.js`.
+(`https://brandon-hoffman.is-a.dev`) for the Generate button's `fetch` to succeed. (The plain
+`branhoff.github.io/goalgrid/` URL 301-redirects to the custom domain, so the custom domain is
+the real origin.) Until the CORS allowlist lands, manual token entry + Save still works;
+Generate reports a clear CORS/offline message. The config page URL is a single constant
+(`CONFIG_URL`) in `src/pkjs/config.js`.
 
 For development, keep named **profiles** in `config/profiles.json` (gitignored — copy
 `config/profiles.example.json` and fill in your URLs and per-user tokens) and swap between

@@ -33,7 +33,8 @@ records where the standard template had no good option for C.
    the DOM/fetch glue in `web/index.html` is review-only (reviewed in a browser and on
    the emulator). The page is deployed to GitHub Pages by `.github/workflows/pages.yml`
    and is dependency-free. Its Generate-token call needs ring-capture to CORS-allowlist
-   the page origin (`https://branhoff.github.io/goalgrid/`) — a ring-capture-side
+   the page origin (`https://brandon-hoffman.is-a.dev`, the custom domain github.io
+   redirects to) — a ring-capture-side
    dependency, not this repo's.
 5. **Sanitizers** are part of the C test build (not in the template's C row). They
    catch out-of-bounds and undefined behavior that warnings cannot.
