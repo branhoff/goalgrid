@@ -6,22 +6,23 @@ const config = require('../src/pkjs/config');
 
 const noHeader = () => null;
 
-test('parseParams reads prefill from the fragment and return_to from the query', () => {
+test('parseParams reads the token from the fragment and return_to from the query', () => {
   const params = onboard.parseParams(
     '?return_to=' + encodeURIComponent('pebblejs://close#'),
     '#baseUrl=' + encodeURIComponent('https://x.example') + '&token=abc'
   );
-  assert.deepStrictEqual(params, { baseUrl: 'https://x.example', token: 'abc', returnTo: 'pebblejs://close#' });
+  // The fragment's baseUrl is deliberately ignored (app-owned URL); only the token is read.
+  assert.deepStrictEqual(params, { token: 'abc', returnTo: 'pebblejs://close#' });
 });
 
 test('parseParams defaults return_to and tolerates empty input', () => {
   assert.deepStrictEqual(onboard.parseParams('', ''),
-    { baseUrl: '', token: '', returnTo: 'pebblejs://close#' });
+    { token: '', returnTo: 'pebblejs://close#' });
 });
 
 test('parseParams handles a key with no value and malformed encoding', () => {
   assert.strictEqual(onboard.parseParams('', '#token').token, '');
-  assert.strictEqual(onboard.parseParams('', '#baseUrl=%E0%A4%A').baseUrl, '%E0%A4%A');
+  assert.strictEqual(onboard.parseParams('', '#token=%E0%A4%A').token, '%E0%A4%A');
 });
 
 test('signupRequest targets /signup and normalises the base URL', () => {
@@ -79,10 +80,10 @@ test('the page default service URL matches the pkjs default (kept in sync)', () 
   assert.match(onboard.DEFAULT_BASE_URL, /^https:\/\//);
 });
 
-test('buildReturnUrl round-trips through config.parseResult', () => {
+test('buildReturnUrl carries only the trimmed token and round-trips through config.parseResult', () => {
   const close = 'pebblejs://close#';
-  const url = onboard.buildReturnUrl(close, 'https://x.example///', '  tok  ');
+  const url = onboard.buildReturnUrl(close, '  tok  ');
   assert.ok(url.indexOf(close) === 0);
   assert.deepStrictEqual(config.parseResult(url.slice(close.length)),
-    { baseUrl: 'https://x.example', token: 'tok' });
+    { baseUrl: config.DEFAULT_BASE_URL, token: 'tok' });
 });

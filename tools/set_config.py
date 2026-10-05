@@ -57,7 +57,10 @@ def load_profile(name):
 
 
 def write_config(stem, profile):
-    value = json.dumps({"baseUrl": profile["baseUrl"], "token": profile["token"]})
+    # baseUrlOverride is the dev-only escape hatch config.js load() reads to point at a non-prod
+    # service; end users never have it (the config page saves only a token), so their installs
+    # always use the app's built-in URL.
+    value = json.dumps({"baseUrlOverride": profile["baseUrl"], "token": profile["token"]})
     with dbm.dumb.open(stem, "c") as db:  # "c" preserves other keys (e.g. fixtureIndex)
         db[STORAGE_KEY] = value
     with dbm.dumb.open(stem, "r") as db:
