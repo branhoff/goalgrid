@@ -2,7 +2,8 @@ name: Pages
 
 # Deploys the hosted watchface config/onboarding page (web/) to GitHub Pages.
 # One-time setup: repo Settings -> Pages -> Source = "GitHub Actions".
-# The watch opens https://branhoff.github.io/goalgrid/ (see src/pkjs/config.js CONFIG_URL).
+# The watch opens https://brandon-hoffman.is-a.dev/goalgrid/ (see src/pkjs/config.js CONFIG_URL);
+# the plain branhoff.github.io/goalgrid/ URL 301-redirects to that custom domain.
 # Note: the Generate-token button also needs ring-capture to CORS-allowlist this origin.
 
 on:
