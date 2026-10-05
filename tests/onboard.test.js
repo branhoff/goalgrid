@@ -74,6 +74,11 @@ test('needsOverwriteConfirm only when a token already exists', () => {
   assert.ok(!onboard.needsOverwriteConfirm(undefined));
 });
 
+test('the page default service URL matches the pkjs default (kept in sync)', () => {
+  assert.strictEqual(onboard.DEFAULT_BASE_URL, config.DEFAULT_BASE_URL);
+  assert.match(onboard.DEFAULT_BASE_URL, /^https:\/\//);
+});
+
 test('buildReturnUrl round-trips through config.parseResult', () => {
   const close = 'pebblejs://close#';
   const url = onboard.buildReturnUrl(close, 'https://x.example///', '  tok  ');
