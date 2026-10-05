@@ -3,7 +3,7 @@
 #include "../model/layout.h"
 
 #define BIG_CELL_MIN 24
-#define TODAY_MARK_SIZE 3
+#define TODAY_MARK_SIZE 6
 
 struct MatrixLayer {
   Layer *layer;
