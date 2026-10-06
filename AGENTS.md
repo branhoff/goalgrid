@@ -49,16 +49,25 @@ something is skipped or failing, say so plainly with the output.
 2. **Types are a gate.** C has no type checker, so strict warnings as errors
    (`-Wconversion`, `-Wshadow`, ...) plus the Pebble SDK's own build are the type gate.
 3. **Coverage is enforced where it can be measured.** Thresholds: C model lines 90 /
-   branches 85, Python sensor 90, pkjs `wire.js`/`calendar.js`/`service.js`/`config.js` 90/85. `main.c`, `matrix_layer.c`,
-   and `pkjs/index.js` are wiring that needs the Pebble runtime; they are excluded and
-   covered instead by the strict build and emulator review. Keep them thin.
+   branches 85, Python sensor 90, pkjs `wire.js`/`calendar.js`/`service.js`/`config.js` and the
+   config page's `web/onboard.js`/`web/goals.js` 90/85. `main.c`, `matrix_layer.c`,
+   `pkjs/index.js`, and the page's `web/page.js` glue are wiring that needs a runtime (Pebble or a
+   DOM); they are excluded and covered instead by the strict build and emulator/page review. Keep
+   them thin.
 4. **Mutation testing grades the tests.** `make mutation` mutates `goalgrid.c` and must
    kill at least `MUTATION_MIN`% of a seeded sample. A surviving mutant is a missing
    assertion unless provably equivalent; say so, don't chase it.
-5. **Structural checks catch what linters miss.** `habit-hooks` runs with this
-   project's C plugin (`tools/habit-hooks-c/`): functions over 40 lines, over 4
-   parameters, nesting over 3, files over 200 lines, duplicated code, comments that
-   restate the next line.
+5. **Structural checks catch what linters miss.** `habit-hooks` runs two plugins
+   (`.habit-hooks/config.toml`). The project's C plugin (`tools/habit-hooks-c/`,
+   sensor `c-structure`) flags functions over 40 lines, over 4 parameters, and nesting
+   over 3; it is pinned to C (`[sensors.c-structure] files`) because its function/
+   parameter rules misread JS module wrappers. The language-agnostic `generic` sensors
+   — `line-count` (files over 200 lines) and `jscpd` (duplicated code) — apply to **all**
+   the code: C, the pkjs, `web/`, the JS tests, and the Python tools. So the 200-line
+   cap and the no-duplication rule hold everywhere, including a module split made only to
+   satisfy them (a second `.js` file must reuse shared helpers, not copy them, or jscpd
+   fails). Deep JS/Python structure (function length, nesting) would need a language
+   plugin; `habit-hooks-python` is the recommended one for the tools.
 6. **Self-documenting over commented.** Keep a comment only for a non-obvious *why*.
 7. **Keep the dependency surface tiny.** No new dependency without a reason recorded
    in `TOOLING.md`. Python scripts declare theirs inline (PEP 723). The pkjs has none.
@@ -82,9 +91,11 @@ something is skipped or failing, say so plainly with the output.
 - The watchface's config/onboarding page is a static page in `web/`, deployed to GitHub Pages
   by `.github/workflows/pages.yml`; the watch opens it via `CONFIG_URL` in `src/pkjs/config.js`.
   It must be hosted (not a `data:` URL) because its `POST /signup` `fetch` needs a real,
-  CORS-allowlistable origin. Keep the split: pure logic in `web/onboard.js` (unit-tested,
-  coverage-gated) and thin DOM/fetch glue in `web/index.html` (review-only). The page has **no
-  dependencies**. CORS allowlisting of the page origin is a ring-capture-side dependency.
+  CORS-allowlistable origin. Keep the split: pure, node-tested logic in `web/onboard.js`
+  (token/signup) and `web/goals.js` (goal CRUD), both coverage-gated; thin DOM/fetch glue in
+  `web/page.js`, loaded by `web/index.html` (both review-only). `goals.js` reuses `onboard.js`'s
+  `baseOf`/`failureMessage` rather than copying them (jscpd forbids the duplication). The page
+  has **no dependencies**. CORS allowlisting of the page origin is a ring-capture-side dependency.
 - After editing `messageKeys` in `package.json`, run `pebble clean`.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.
 - Keep `GOALGRID_CAPACITY`, `GOALGRID_MAX_GOALS`, `GOALGRID_NAME_LEN` in `goalgrid.h` and

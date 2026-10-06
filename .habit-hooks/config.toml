@@ -1,2 +1,20 @@
+# files is the scope for file-level sensors (line-count); jscpd reads its own .jscpd.json
+# and already scans the whole repo regardless of this list. The c-structure sensor is a C
+# structural analyzer whose function-length/parameter rules misread JS module wrappers (an
+# IIFE/UMD wrapper reads as one 100+ line function), so it is pinned to C below while
+# line-count's 200-line cap and jscpd's duplication check apply to all the code.
 plugins = ["c", "generic"]
+files = [
+  "src/**/*.c",
+  "src/**/*.h",
+  "tests/**/*.c",
+  "src/pkjs/**/*.js",
+  "web/**/*.js",
+  "web/**/*.html",
+  "tests/**/*.js",
+  "tools/**/*.js",
+  "tools/**/*.py",
+]
+
+[sensors.c-structure]
 files = ["src/**/*.c", "src/**/*.h", "tests/**/*.c"]
