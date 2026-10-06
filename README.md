@@ -73,6 +73,15 @@ that can generate that token itself — so onboarding no longer needs an outside
    "not configured yet": the watch shows an empty grid until a token is set. If the service
    rejects the token (401/403), the grid is cleared so stale data can't look live.
 
+**Creating goals (same page).** Below the token, the **Goals** section creates goals against the
+current token's identity via the service's `POST /goals` and lists existing ones (`GET /goals`).
+Pick a type — *done/not done* (binary) or *count* (reps, pages) — and optionally add comma-separated
+alternate phrases the ring also accepts when logging. Creating is idempotent (a goal with the same
+name is reused, not duplicated), and the page echoes the service's `logHint` — the exact phrase to
+speak to your ring to log it. The watch shows the first five goals (by creation order) and shortens
+names past 15 characters; the page warns when you exceed either. Goal creation reuses the same
+token and page origin, so it needs no CORS allowlisting beyond what Generate already requires.
+
 Two staged dependencies make the page fully live: GitHub Pages must be enabled (repo Settings
 → Pages → Source = "GitHub Actions"), and ring-capture must CORS-allowlist the page's origin
 (`https://brandon-hoffman.is-a.dev`) for the Generate button's `fetch` to succeed. (The plain
