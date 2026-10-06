@@ -93,7 +93,7 @@ PY_COV ?= 90
 JS_TEST := "tests/*.test.js"
 JS_COVERAGE := --experimental-test-coverage --test-coverage-include=src/pkjs/wire.js --test-coverage-include=src/pkjs/calendar.js \
                --test-coverage-include=src/pkjs/service.js --test-coverage-include=src/pkjs/config.js \
-               --test-coverage-include=web/onboard.js \
+               --test-coverage-include=web/onboard.js --test-coverage-include=web/goals.js \
                --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-functions=90
 
 CMAKE_HOST = cmake -S . -B out/host -G Ninja -DCMAKE_BUILD_TYPE=Debug
