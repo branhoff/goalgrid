@@ -13,6 +13,12 @@
   input { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc;
     border-radius: 6px; background: #fff; color: #1a1a1a; }
   input[readonly] { background: #ececec; color: #555; }
+  select { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc;
+    border-radius: 6px; background: #fff; color: #1a1a1a; }
+  ul#glist { list-style: none; padding: 0; margin: 14px 0 0; }
+  ul#glist li { padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; margin-bottom: 6px;
+    font-size: 14px; background: #fff; }
+  ul#glist li .meta { color: #888; font-size: 12px; }
   button { width: 100%; margin-top: 12px; padding: 12px; font-size: 16px; font-weight: 600; border: none;
     border-radius: 6px; background: #ff4700; color: #fff; cursor: pointer;
     transition: transform 0.08s ease, background-color 0.15s ease, box-shadow 0.12s ease; }
@@ -28,8 +34,10 @@
   .note { margin: 10px 0 0; font-size: 12px; color: #666; line-height: 1.4; }
   .note code { background: #e6e6e6; padding: 1px 4px; border-radius: 3px; }
   #status { margin-top: 10px; font-size: 13px; line-height: 1.4; min-height: 1em; }
-  #status.ok { color: #1a7f37; }
-  #status.err { color: #c62828; }
+  #status.ok, #gstatus.ok { color: #1a7f37; }
+  #status.err, #gstatus.err { color: #c62828; }
+  #gstatus { margin-top: 10px; font-size: 13px; line-height: 1.4; min-height: 1em; }
+  #gstatus.warn { color: #b26a00; }
   hr { border: none; border-top: 1px solid #ddd; margin: 22px 0; }
 </style>
 </head>
@@ -52,6 +60,26 @@
     Index-app setting this page can't set for you. The token is shown once &mdash; if you lose
     it, Generate mints a new identity that won't see your old goals.</p>
   <div id="status"></div>
+
+  <hr>
+  <h3>Goals</h3>
+  <p class="hint">Create the goals you want to track. They appear on the watch at its next refresh,
+    which shows the first 5.</p>
+  <label for="gname">Goal name</label>
+  <input id="gname" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label for="gtype">Type</label>
+  <select id="gtype">
+    <option value="binary">Done / not done</option>
+    <option value="count">Count (e.g. reps, pages)</option>
+  </select>
+  <label for="galiases">Other names (optional)</label>
+  <input id="galiases" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <p class="note">Comma-separated phrases the ring also accepts when logging this goal
+    (e.g. <code>jog, run</code>). Leave blank if the name is enough.</p>
+  <button id="gcreate">Create goal</button>
+  <div id="gstatus"></div>
+  <ul id="glist"></ul>
+  <p class="note" id="gwarn"></p>
 
   <hr>
   <button id="save">Save token to watchface</button>
@@ -89,6 +117,7 @@
             if (result.kind === 'ok') {
               token.value = result.token;
               setStatus('Token generated. Copy it into your Index webhook, then Save.', 'ok');
+              loadGoals();
             } else {
               setStatus(result.message, 'err');
             }
@@ -135,6 +164,90 @@
       location.href = onboard.buildReturnUrl(params.returnTo, token.value);
     }
 
+    // ---- Goals ----
+    var gname = document.getElementById('gname');
+    var gtype = document.getElementById('gtype');
+    var galiases = document.getElementById('galiases');
+    var gstatus = document.getElementById('gstatus');
+    var glist = document.getElementById('glist');
+    var gwarn = document.getElementById('gwarn');
+
+    function setGoalStatus(text, kind) {
+      gstatus.textContent = text;
+      gstatus.className = kind || '';
+    }
+
+    function renderGoals(goals) {
+      glist.textContent = '';
+      goals.forEach(function (goal, i) {
+        var li = document.createElement('li');
+        li.appendChild(document.createTextNode('#' + (goal.number || i + 1) + '  ' + String(goal.name)));
+        var meta = document.createElement('span');
+        meta.className = 'meta';
+        meta.textContent = '  ' + (goal.type === 'count' ? 'count' : 'done/not');
+        li.appendChild(meta);
+        glist.appendChild(li);
+      });
+      var limits = onboard.describeGoalLimits(goals);
+      var warnings = [];
+      if (limits.hidden > 0) {
+        warnings.push('The watch shows the first ' + onboard.WATCH_MAX_GOALS + ' goals; ' +
+          limits.hidden + ' more won\'t appear.');
+      }
+      if (limits.longNames.length) {
+        warnings.push('Shortened on the watch (over ' + onboard.WATCH_NAME_LEN + ' chars): ' +
+          limits.longNames.join(', ') + '.');
+      }
+      gwarn.textContent = warnings.join(' ');
+    }
+
+    // Shared GET/POST handler for the two goal endpoints: run the matching classifier, then the
+    // caller's onOk. Network/CORS failures and non-OK results land in the goal status line.
+    function goalFetch(req, classify, onOk) {
+      fetch(req.url, { method: req.method, headers: req.headers, body: req.body })
+        .then(function (resp) {
+          return resp.text().then(function (body) {
+            var result = classify(resp.status, body);
+            if (result.kind === 'ok') {
+              onOk(result);
+            } else {
+              setGoalStatus(result.message, 'err');
+            }
+          });
+        })
+        .catch(function () {
+          setGoalStatus('Could not reach the service (it may not allow this page yet, or you are offline).', 'err');
+        });
+    }
+
+    function loadGoals() {
+      if (!token.value.trim()) {
+        glist.textContent = '';
+        gwarn.textContent = '';
+        return setGoalStatus('Add a token above to create and list goals.', '');
+      }
+      goalFetch(onboard.listGoalsRequest(onboard.DEFAULT_BASE_URL, token.value),
+        onboard.classifyGoalList, function (result) { renderGoals(result.goals); });
+    }
+
+    function createGoal() {
+      if (!token.value.trim()) {
+        return setGoalStatus('Add a token above first.', 'err');
+      }
+      if (!gname.value.trim()) {
+        return setGoalStatus('Enter a goal name.', 'err');
+      }
+      setGoalStatus('Creating…', '');
+      goalFetch(onboard.goalRequest(onboard.DEFAULT_BASE_URL, token.value,
+        { name: gname.value, type: gtype.value, aliases: galiases.value }),
+      onboard.classifyGoal, function (result) {
+        gname.value = '';
+        galiases.value = '';
+        setGoalStatus(result.message + (result.logHint ? ' ' + result.logHint : ''), 'ok');
+        loadGoals();
+      });
+    }
+
     document.getElementById('gen').addEventListener('click', generate);
     document.getElementById('copyUrl').addEventListener('click', function (e) {
       copyField(url, 'Service URL', e.currentTarget);
@@ -142,7 +255,11 @@
     document.getElementById('copy').addEventListener('click', function (e) {
       copyField(token, 'Token', e.currentTarget);
     });
+    document.getElementById('gcreate').addEventListener('click', createGoal);
+    // Re-list when the token changes (paste or Generate) so goals track the active identity.
+    token.addEventListener('change', loadGoals);
     document.getElementById('save').addEventListener('click', save);
+    loadGoals();
   })();
   </script>
 </body>
