@@ -29,7 +29,8 @@
       "GRID_EPOCH_DAY",
       "GRID_TYPES",
       "GRID_NAMES",
-      "GRID_VALUES"
+      "GRID_VALUES",
+      "THEME"
     ],
     "resources": {
       "media": []

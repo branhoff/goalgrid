@@ -6,18 +6,20 @@ const config = require('../src/pkjs/config');
 
 const noHeader = () => null;
 
-test('parseParams reads the token from the fragment and return_to from the query', () => {
+test('parseParams reads the token and theme from the fragment and return_to from the query', () => {
   const params = onboard.parseParams(
     '?return_to=' + encodeURIComponent('pebblejs://close#'),
-    '#baseUrl=' + encodeURIComponent('https://x.example') + '&token=abc'
+    '#baseUrl=' + encodeURIComponent('https://x.example') + '&token=abc&theme=1'
   );
-  // The fragment's baseUrl is deliberately ignored (app-owned URL); only the token is read.
-  assert.deepStrictEqual(params, { token: 'abc', returnTo: 'pebblejs://close#' });
+  // The fragment's baseUrl is deliberately ignored (app-owned URL); token and theme are read.
+  assert.deepStrictEqual(params, { token: 'abc', theme: 1, returnTo: 'pebblejs://close#' });
 });
 
-test('parseParams defaults return_to and tolerates empty input', () => {
+test('parseParams defaults return_to and the dark theme, and tolerates empty input', () => {
   assert.deepStrictEqual(onboard.parseParams('', ''),
-    { token: '', returnTo: 'pebblejs://close#' });
+    { token: '', theme: 0, returnTo: 'pebblejs://close#' });
+  // An unknown theme in the fragment clamps to dark.
+  assert.strictEqual(onboard.parseParams('', '#theme=7').theme, 0);
 });
 
 test('parseParams handles a key with no value and malformed encoding', () => {
@@ -80,10 +82,14 @@ test('the page default service URL matches the pkjs default (kept in sync)', () 
   assert.match(onboard.DEFAULT_BASE_URL, /^https:\/\//);
 });
 
-test('buildReturnUrl carries only the trimmed token and round-trips through config.parseResult', () => {
+test('buildReturnUrl carries the trimmed token and theme and round-trips through config.parseResult', () => {
   const close = 'pebblejs://close#';
-  const url = onboard.buildReturnUrl(close, '  tok  ');
+  const url = onboard.buildReturnUrl(close, '  tok  ', 1);
   assert.ok(url.indexOf(close) === 0);
   assert.deepStrictEqual(config.parseResult(url.slice(close.length)),
-    { baseUrl: config.DEFAULT_BASE_URL, token: 'tok' });
+    { baseUrl: config.DEFAULT_BASE_URL, token: 'tok', theme: 1 });
+  // A missing/unknown theme defaults to dark, and still round-trips.
+  const darkUrl = onboard.buildReturnUrl(close, 'tok');
+  assert.deepStrictEqual(config.parseResult(darkUrl.slice(close.length)),
+    { baseUrl: config.DEFAULT_BASE_URL, token: 'tok', theme: 0 });
 });

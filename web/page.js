@@ -5,11 +5,13 @@
   var params = onboard.parseParams(location.search, location.hash);
   var url = document.getElementById('u');
   var token = document.getElementById('t');
+  var theme = document.getElementById('theme');
   var status = document.getElementById('status');
   // The service URL is app-owned: always use the page's own constant, never a value from the
   // fragment, so a crafted #baseUrl= can't make Generate POST to (or Copy copy) an attacker URL.
   url.value = onboard.DEFAULT_BASE_URL;
   token.value = params.token;
+  theme.value = String(params.theme);
 
   function setStatus(text, kind) {
     status.textContent = text;
@@ -76,7 +78,7 @@
         !confirm('No token entered - this clears the watchface\'s saved token. Continue?')) {
       return;
     }
-    location.href = onboard.buildReturnUrl(params.returnTo, token.value);
+    location.href = onboard.buildReturnUrl(params.returnTo, token.value, theme.value);
   }
 
   // ---- Goals ----
