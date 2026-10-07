@@ -5,6 +5,7 @@
 #include "ui/matrix_layer.h"
 
 #define PERSIST_KEY_GRID 1
+#define PERSIST_KEY_THEME 2
 #define INBOX_SIZE 512
 #define OUTBOX_SIZE 64
 #define REFRESH_MINUTES 30
@@ -19,6 +20,7 @@ static MatrixLayer *s_matrix;
 static GoalGrid s_grid;
 static int s_today_weekday;
 static time_t s_last_request;
+static Theme s_theme = THEME_DARK;
 
 static uint32_t prv_today_epoch_day(const struct tm *now) {
   return goalgrid_epoch_day(now->tm_year + 1900, now->tm_mon + 1, now->tm_mday);
@@ -100,9 +102,31 @@ static void prv_apply_grid(DictionaryIterator *iter, const Tuple *epoch_day) {
   }
 }
 
+// Paint the window chrome for the current theme; a no-op until the window's layers exist.
+static void prv_apply_theme(void) {
+  if (!s_matrix) {
+    return;
+  }
+  window_set_background_color(s_window, theme_background(s_theme));
+  text_layer_set_text_color(s_time_layer, theme_chrome_text(s_theme));
+  text_layer_set_text_color(s_date_layer, theme_chrome_text(s_theme));
+  matrix_layer_set_theme(s_matrix, s_theme);
+}
+
 static void prv_inbox_received(DictionaryIterator *iter, void *context) {
   if (dict_find(iter, MESSAGE_KEY_READY)) {
     prv_request_grid();
+  }
+  // THEME rides on every grid; only write flash / redraw when it changes. value->uint8 is the
+  // low byte of the phone's JS number, all the 0/1 code needs.
+  const Tuple *theme = dict_find(iter, MESSAGE_KEY_THEME);
+  if (theme) {
+    const Theme next = theme_from_byte(theme->value->uint8);
+    if (next != s_theme) {
+      s_theme = next;
+      persist_write_int(PERSIST_KEY_THEME, s_theme);
+      prv_apply_theme();
+    }
   }
   const Tuple *epoch_day = dict_find(iter, MESSAGE_KEY_GRID_EPOCH_DAY);
   if (epoch_day) {
@@ -123,7 +147,6 @@ static TextLayer *prv_text_layer_create(Layer *parent, GRect frame, const char *
 static void prv_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   const GRect bounds = layer_get_bounds(root);
-  window_set_background_color(window, GColorBlack);
 
   const Layout layout =
       layout_compute(bounds.size.w, bounds.size.h, PBL_IF_ROUND_ELSE(true, false));
@@ -134,6 +157,7 @@ static void prv_window_load(Window *window) {
   s_matrix = matrix_layer_create(GRect(layout.cal_x, layout.cal_y, layout.cal_w, layout.cal_h));
   layer_add_child(root, matrix_layer_get_layer(s_matrix));
 
+  prv_apply_theme();
   prv_update();
 }
 
@@ -146,6 +170,9 @@ static void prv_window_unload(Window *window) {
 static void prv_init(void) {
   const time_t t = time(NULL);
   prv_load_grid(localtime(&t));
+  if (persist_exists(PERSIST_KEY_THEME)) {
+    s_theme = theme_from_byte((uint8_t)persist_read_int(PERSIST_KEY_THEME));
+  }
 
   s_window = window_create();
   app_message_register_inbox_received(prv_inbox_received);

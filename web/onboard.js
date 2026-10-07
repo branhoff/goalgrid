@@ -22,6 +22,13 @@
   // artifacts can't share the constant; tests/onboard.test.js asserts they match.
   var DEFAULT_BASE_URL = 'https://ring-capture-859396441579.us-west1.run.app';
 
+  // Theme codes match the watch's Theme enum and src/pkjs/config.js: 0 = dark (default), 1 = light.
+  var THEME_DARK = 0;
+  var THEME_LIGHT = 1;
+  function themeCode(value) {
+    return Number(value) === THEME_LIGHT ? THEME_LIGHT : THEME_DARK;
+  }
+
   function safeDecode(value) {
     try {
       return decodeURIComponent(value);
@@ -48,12 +55,14 @@
 
   // The token prefill rides in the fragment so the secret never reaches the host's server logs;
   // return_to comes from the query (how the Pebble app supplies it). The service URL is never
-  // read from the fragment - it is app-owned, so the page pins its own DEFAULT_BASE_URL.
+  // read from the fragment - it is app-owned, so the page pins its own DEFAULT_BASE_URL. The
+  // theme (dark/light) also rides in the fragment so the page opens on the saved choice.
   function parseParams(search, hash) {
     var query = parsePairs(search);
     var frag = parsePairs(hash);
     return {
       token: frag.token || '',
+      theme: themeCode(frag.theme),
       returnTo: query.return_to || CLOSE_URL
     };
   }
@@ -116,13 +125,19 @@
     return String(currentToken || '').trim() !== '';
   }
 
-  // The URL is read-only on the page (app-owned), so Save only returns the token.
-  function buildReturnUrl(returnTo, token) {
-    return returnTo + encodeURIComponent(JSON.stringify({ token: String(token || '').trim() }));
+  // The URL is read-only on the page (app-owned), so Save returns the token and the theme choice.
+  function buildReturnUrl(returnTo, token, theme) {
+    return returnTo + encodeURIComponent(JSON.stringify({
+      token: String(token || '').trim(),
+      theme: themeCode(theme)
+    }));
   }
 
   return {
     DEFAULT_BASE_URL: DEFAULT_BASE_URL,
+    THEME_DARK: THEME_DARK,
+    THEME_LIGHT: THEME_LIGHT,
+    themeCode: themeCode,
     baseOf: baseOf,
     failureMessage: failureMessage,
     parseParams: parseParams,

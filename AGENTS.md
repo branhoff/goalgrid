@@ -50,7 +50,7 @@ something is skipped or failing, say so plainly with the output.
    (`-Wconversion`, `-Wshadow`, ...) plus the Pebble SDK's own build are the type gate.
 3. **Coverage is enforced where it can be measured.** Thresholds: C model lines 90 /
    branches 85, Python sensor 90, pkjs `wire.js`/`calendar.js`/`service.js`/`config.js` and the
-   config page's `web/onboard.js`/`web/goals.js` 90/85. `main.c`, `matrix_layer.c`,
+   config page's `web/onboard.js`/`web/goals.js` 90/85. `main.c`, `matrix_layer.c`, `theme.c`,
    `pkjs/index.js`, and the page's `web/page.js` glue are wiring that needs a runtime (Pebble or a
    DOM); they are excluded and covered instead by the strict build and emulator/page review. Keep
    them thin.
@@ -100,6 +100,9 @@ something is skipped or failing, say so plainly with the output.
 - `src/c` is not on the Pebble include path; use relative includes between subdirs.
 - Keep `GOALGRID_CAPACITY`, `GOALGRID_MAX_GOALS`, `GOALGRID_NAME_LEN` in `goalgrid.h` and
   their copies at the top of `pkjs/wire.js` in sync.
+- The theme is one byte on the wire (`THEME` message key): `0` = dark, `1` = light, anything
+  else clamps to dark. The `Theme` enum in `src/c/ui/theme.h`, the `THEME_*`/`themeCode` helpers
+  in `src/pkjs/config.js`, and their copies in `web/onboard.js` must agree on those codes.
 - The data contract is ring-capture's `GET /grid` schema 2 (raw UTC events, half-open
   `[from, to)` ms window); `tests/contract/` holds a golden response and
   `tools/gen_fixtures.py` generates fixtures in that shape (`fixtures_current` fails if

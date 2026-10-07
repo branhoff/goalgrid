@@ -12,41 +12,31 @@ struct MatrixLayer {
 typedef struct {
   const GoalGrid *grid;
   int today_weekday;
+  Theme theme;
 } MatrixData;
 
 typedef struct {
   GContext *ctx;
   GFont font;
   const GoalGrid *grid;
+  Theme theme;
 } Painter;
 
-static const char *const WEEKDAY_LETTERS[GOALGRID_DAYS_PER_WEEK] = {
-    "S", "M", "T", "W", "T", "F", "S",
-};
+static const char *const WEEKDAY_LETTERS[GOALGRID_DAYS_PER_WEEK] = {"S", "M", "T", "W",
+                                                                    "T", "F", "S"};
 
-static GColor prv_text_color(uint8_t level) {
+// Color screens shade five levels of green (theme.c owns the two ramps); one-bit screens
+// cannot, so they show four states: outline, double outline, solid.
+static void prv_paint_body(GContext *ctx, GRect rect, uint8_t level, Theme theme) {
 #ifdef PBL_COLOR
-  return level >= 2 ? GColorBlack : GColorWhite;
-#else
-  return level == GOALGRID_LEVELS - 1 ? GColorBlack : GColorWhite;
-#endif
-}
-
-// Color screens shade five levels of green. One-bit screens cannot, so they show
-// four states: outline (nothing done), double outline (some done), solid (all done).
-static void prv_paint_body(GContext *ctx, GRect rect, uint8_t level) {
-#ifdef PBL_COLOR
-  // SpringBud (#AAFF00) read yellow on hardware; ScreaminGreen is a true, brighter light green.
-  static const GColor palette[GOALGRID_LEVELS] = {
-      GColorDarkGray, GColorDarkGreen, GColorIslamicGreen, GColorGreen, GColorScreaminGreen,
-  };
-  graphics_context_set_fill_color(ctx, palette[level]);
+  graphics_context_set_fill_color(ctx, theme_cell_fill(theme, level));
   graphics_fill_rect(ctx, rect, 0, GCornerNone);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
   if (level == 0) {
+    graphics_context_set_stroke_color(ctx, theme_muted_text(theme));
     graphics_draw_rect(ctx, rect);
   }
 #else
+  (void)theme;
   const bool all_done = level == GOALGRID_LEVELS - 1;
   graphics_context_set_fill_color(ctx, all_done ? GColorWhite : GColorBlack);
   graphics_fill_rect(ctx, rect, 0, GCornerNone);
@@ -60,8 +50,9 @@ static void prv_paint_body(GContext *ctx, GRect rect, uint8_t level) {
 #endif
 }
 
-static void prv_mark_today(GContext *ctx, GRect rect, uint8_t level) {
+static void prv_mark_today(GContext *ctx, GRect rect, uint8_t level, Theme theme) {
 #ifdef PBL_COLOR
+  (void)level, (void)theme;
   // A 1px red outline is nearly invisible on-watch: use a 2px border plus a top-left square.
   graphics_context_set_stroke_color(ctx, GColorRed);
   graphics_draw_rect(ctx, rect);
@@ -71,7 +62,7 @@ static void prv_mark_today(GContext *ctx, GRect rect, uint8_t level) {
                      GRect(rect.origin.x + 1, rect.origin.y + 1, TODAY_MARK_SIZE, TODAY_MARK_SIZE),
                      0, GCornerNone);
 #else
-  graphics_context_set_fill_color(ctx, prv_text_color(level));
+  graphics_context_set_fill_color(ctx, theme_cell_text(theme, level));
   graphics_fill_rect(ctx,
                      GRect(rect.origin.x + 2, rect.origin.y + 2, TODAY_MARK_SIZE, TODAY_MARK_SIZE),
                      0, GCornerNone);
@@ -97,8 +88,7 @@ static void prv_draw_unjudged(const Painter *painter, GRect rect, const char *la
   graphics_context_set_stroke_color(painter->ctx, GColorDarkGray);
   graphics_draw_rect(painter->ctx, rect);
 #endif
-  prv_draw_centered(painter, label, prv_text_box(rect),
-                    PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
+  prv_draw_centered(painter, label, prv_text_box(rect), theme_muted_text(painter->theme));
 }
 
 static void prv_draw_cell(const Painter *painter, GRect rect, int days_ago) {
@@ -109,25 +99,26 @@ static void prv_draw_cell(const Painter *painter, GRect rect, int days_ago) {
     // Not filled, so it never reads as "nothing done".
     prv_draw_unjudged(painter, rect, label);
     if (days_ago == 0) {
-      prv_mark_today(painter->ctx, rect, 0);
+      prv_mark_today(painter->ctx, rect, 0, painter->theme);
     }
     return;
   }
 
   const uint8_t level = goalgrid_level(goalgrid_day(painter->grid, days_ago));
-  prv_paint_body(painter->ctx, rect, level);
+  prv_paint_body(painter->ctx, rect, level, painter->theme);
   if (days_ago == 0) {
-    prv_mark_today(painter->ctx, rect, level);
+    prv_mark_today(painter->ctx, rect, level, painter->theme);
   }
-  prv_draw_centered(painter, label, prv_text_box(rect), prv_text_color(level));
+  prv_draw_centered(painter, label, prv_text_box(rect), theme_cell_text(painter->theme, level));
 }
 
 static void prv_draw_header(const Painter *painter, int x0, int cell, int today_weekday) {
   for (int col = 0; col < GOALGRID_DAYS_PER_WEEK; col++) {
     const GRect box = GRect(x0 + col * cell, -2, cell - LAYOUT_CELL_GAP, LAYOUT_HEADER_H);
     const bool is_today = col == today_weekday;
-    prv_draw_centered(painter, WEEKDAY_LETTERS[col], box,
-                      is_today ? GColorWhite : PBL_IF_COLOR_ELSE(GColorLightGray, GColorWhite));
+    prv_draw_centered(
+        painter, WEEKDAY_LETTERS[col], box,
+        is_today ? theme_chrome_text(painter->theme) : theme_muted_text(painter->theme));
 #ifndef PBL_COLOR
     if (is_today) {
       graphics_context_set_fill_color(painter->ctx, GColorWhite);
@@ -153,11 +144,13 @@ static void prv_update_proc(Layer *layer, GContext *ctx) {
       .font = fonts_get_system_font(cell >= BIG_CELL_MIN ? FONT_KEY_GOTHIC_18_BOLD
                                                          : FONT_KEY_GOTHIC_14_BOLD),
       .grid = data->grid,
+      .theme = data->theme,
   };
   const Painter header = {
       .ctx = ctx,
       .font = fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
       .grid = data->grid,
+      .theme = data->theme,
   };
 
   prv_draw_header(&header, x0, cell, data->today_weekday);
@@ -179,6 +172,7 @@ MatrixLayer *matrix_layer_create(GRect frame) {
   MatrixData *data = layer_get_data(matrix->layer);
   data->grid = NULL;
   data->today_weekday = 0;
+  data->theme = THEME_DARK;
   layer_set_update_proc(matrix->layer, prv_update_proc);
   return matrix;
 }
@@ -196,5 +190,11 @@ void matrix_layer_set_grid(MatrixLayer *matrix, const GoalGrid *grid, int today_
   MatrixData *data = layer_get_data(matrix->layer);
   data->grid = grid;
   data->today_weekday = today_weekday;
+  layer_mark_dirty(matrix->layer);
+}
+
+void matrix_layer_set_theme(MatrixLayer *matrix, Theme theme) {
+  MatrixData *data = layer_get_data(matrix->layer);
+  data->theme = theme;
   layer_mark_dirty(matrix->layer);
 }
